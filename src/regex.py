@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable
+import functools
+from typing import Any, Callable, TypeVar
 
 # TODO: https://www.geeksforgeeks.org/visualize-graphs-in-python/
 
@@ -14,12 +15,17 @@ class ParserPredicate(Callable[['StringProvider'], bool]):
     def __call__(self, string: 'StringProvider') -> bool:
         return self._callable
 
+T = TypeVar("T")
+def curry(func: Callable[[Any], T]) -> Callable[[Any], Callable[[Any], T]]:
+    return functools.partial(functools.partial, func)
+
 class StringProvider:
     _string: str
     _cursor: int
 
     @ParserPredicate()
-    def try_consume(self, match_string: str) -> bool:
+    @curry
+    def try_consume(self, *, match_string: str) -> bool:
         if self._string[
             self._cursor
             : self._cursor + len(match_string)] == match_string:
@@ -68,4 +74,4 @@ class Path(ABC):
     opens: list[CaptureGroup]
     closes: list[CaptureGroup]
 
-    predicate: 
+    predicate: ParserPredicate
