@@ -1,31 +1,44 @@
 from abc import ABC, abstractmethod
 import functools
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, TypeVar, TypeVarTuple
+
+from regex import RegexParser
 
 # TODO: https://www.geeksforgeeks.org/visualize-graphs-in-python/
-
-class ParserPredicate(Callable[['StringProvider'], bool]):
-    _callable: Callable[['StringProvider'], bool]
-    _compiled: str
-    
-    def __init__(self, function: Callable[['StringProvider'], bool], compiled: str):
-        self._callable = function
-        self._compiled = compiled
-    
-    def __call__(self, string: 'StringProvider') -> bool:
-        return self._callable
 
 T = TypeVar("T")
 def curry(func: Callable[[Any], T]) -> Callable[[Any], Callable[[Any], T]]:
     return functools.partial(functools.partial, func)
 
-class StringProvider:
+# Example use:
+# @curry
+# def add(a, b):
+#     return a + b
+
+# add(1)(2)
+class ParserPredicate(Callable[['RegexParser'], bool]):
+    _callable: Callable[['RegexParser'], bool]
+    
+    def __init__(self, function: Callable[['RegexParser'], bool]):
+        self._callable = function
+
+    def __call__(self, ctx: 'RegexParser') -> bool:
+        return self._callable(ctx)
+    
+    def compile(self):
+        pass
+
+@staticmethod
+def represented_by(func: ParserPredicate, symbol: str):
+    RegexParser.parser_symbols[symbol] = func
+    return func
+
+class RegexParser:
+    parser_symbols: dict[str, 'ParserPredicate'] = {}
     _string: str
     _cursor: int
-
-    @ParserPredicate()
-    @curry
-    def try_consume(self, *, match_string: str) -> bool:
+    
+    def try_consume(self, match_string: str) -> bool:
         if self._string[
             self._cursor
             : self._cursor + len(match_string)] == match_string:
@@ -39,9 +52,12 @@ class StringProvider:
             return True
         return False
     
+    @represented_by("$")
+    @ParserPredicate
     def end(self) -> bool:
         return self._cursor >= len(self._string)
-    
+
+    @represented_by("^")
     def begin(self):
         return self._cursor <= 0
 
@@ -74,4 +90,4 @@ class Path(ABC):
     opens: list[CaptureGroup]
     closes: list[CaptureGroup]
 
-    predicate: ParserPredicate
+    predicate: AbstractRegexParser.ParserPredicate
