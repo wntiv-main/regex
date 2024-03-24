@@ -11,7 +11,9 @@ try:
     from matplotlib.widgets import Button
 except ImportError:
     print("If you wish to proceed to display the debug graphic, "
-          "`$ pip install networkx` and `$ pip install matplotlib`")
+          "`$ pip install networkx`, `$ pip install matplotlib`, "
+          "`$ pip install pyqt5`, and `$ pip install scipy`")
+    quit()
 import networkx_curved_label
 
 N = TypeVar("N")  # Node
@@ -233,9 +235,9 @@ class MultiFigureViewer:
 
 def test_layouts_for(start: N, end: N | None = None):
     view = MultiFigureViewer()
-    for name in networkx.layout.__all__:
+    for name in nxlayout.__all__:
         try:
-            layout = getattr(networkx.layout, name)
+            layout = getattr(nxlayout, name)
             fig = DebugGraphViewer(start, end, layout).render()
             fig.canvas.manager.set_window_title(name)
         except Exception:

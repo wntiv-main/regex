@@ -1,7 +1,7 @@
 import functools
 from typing import Callable
 
-from funcutil import extend, negate
+from funcutil import extend, negate, wrap, wrap_method
 from regexutil import CaptureGroup, State, Edge, MatchConditions, \
     _parser_symbols, _parser_symbols_escaped
 
@@ -21,6 +21,16 @@ class Regex:
 
     def end(self):
         return self._end
+    
+    def walk_graph(self, visitor: Callable[[Edge], None]) \
+            -> Callable[['Regex'], None]:
+        pass
+
+    @wrap_method(walk_graph)
+    def epsilon_closure(edge: Edge):
+        # e-move -> single_input
+        # single_output
+        pass
 
 
 class RegexBuilder:

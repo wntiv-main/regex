@@ -1,10 +1,11 @@
 import functools
-from typing import Any, Callable, TypeVar, TypeVarTuple, Unpack
+from typing import Any, Callable, TypeAlias, TypeVar, TypeVarTuple, Unpack
 
 
 T = TypeVar("T")
+T2 = TypeVar("T2")
 TArgs = TypeVarTuple("TArgs")
-TRemaining = TypeVarTuple("TRemaining")
+TArgs2 = TypeVarTuple("TArgs2")
 
 
 def curry(func: Callable[[Any], T]) -> Callable[[Any], Callable[[Any], T]]:
@@ -12,7 +13,7 @@ def curry(func: Callable[[Any], T]) -> Callable[[Any], Callable[[Any], T]]:
 
 
 class extend:
-    _func_impl: Callable[[*TRemaining], T]
+    _func_impl: Callable[[*TArgs2], T]
 
     def __init__(
             self,
@@ -21,9 +22,23 @@ class extend:
         self._func_impl = functools.partial(
             function_implementation, *args, **kwargs)
 
-    def __call__(self, func: Callable[[*TRemaining], None])\
-            -> Callable[[*TRemaining], T]:
+    def __call__(self, func: Callable[[*TArgs2], None])\
+            -> Callable[[*TArgs2], T]:
         return self._func_impl
+
+WrappedFunction: TypeAlias = Callable[[*TArgs], T]
+InnerFunction: TypeAlias = Callable[[*TArgs], T]
+def wrap(wrapper_function: Callable[[Callable[[*TArgs2], T2], *TArgs], T])\
+        -> Callable[[InnerFunction], WrappedFunction]:
+    def wrap_decorator(inner_function: InnerFunction) -> WrappedFunction:
+        return functools.partial(wrapper_function, inner_function)
+    return wrap_decorator
+
+def wrap_method(wrapper_function: Callable[[Callable[[*TArgs2], T2], *TArgs], T])\
+        -> Callable[[InnerFunction], WrappedFunction]:
+    def wrap_decorator(inner_function: InnerFunction) -> WrappedFunction:
+        return functools.partialmethod(wrapper_function, inner_function)
+    return wrap_decorator
 
 # def extend(
 #         _: Callable[[*TArgs], None],
