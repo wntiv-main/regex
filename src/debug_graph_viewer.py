@@ -1,10 +1,14 @@
-from typing import Generic, TypeVar
+import math
+from typing import Callable, Generic, TypeVar
 
 # REFERENCE: https://www.geeksforgeeks.org/visualize-graphs-in-python/
 
 try:
     import networkx
+    from networkx import layout as nxlayout
     import matplotlib.pyplot
+    import matplotlib.figure
+    from matplotlib.widgets import Button
 except ImportError:
     print("If you wish to proceed to display the debug graphic, "
           "`$ pip install networkx` and `$ pip install matplotlib`")
@@ -20,18 +24,29 @@ class DebugGraphViewer(Generic[N, E]):
     _visited_edges: set[E]
     _graph: networkx.MultiDiGraph
     _layout: dict[tuple[int, int], tuple[float, float]] | None
+    _layout_planner: Callable
+    _color_overrides: dict[int, tuple[float, float, float]]
 
-    def __init__(self, start: N) -> None:
+    def __init__(
+            self,
+            start: N,
+            end: N | None = None,
+            layout=networkx.layout.kamada_kawai_layout):
         self._auto_increment_id = 0
         self._visited_nodes = {}
         self._visited_edges = set()
         self._graph = networkx.MultiDiGraph()
-        self.explore_node(start)
+        self._layout = None
+        self._layout_planner = layout
+        self._color_overrides = {
+            self.explore_node(start): (1.0, 0.3, 0.3)
+        }
+        if end is not None:
+            self._color_overrides[self.explore_node(end)] = (0.3, 1.0, 0.3)
 
-    def explore_node(self, node: N) -> int:
+    def explore_node(self, node: N, color=None) -> int:
         if node in self._visited_nodes:
             return self._visited_nodes[node]
-        print(f"at {node=}")
         id = self._auto_increment_id
         self._auto_increment_id += 1
         self._visited_nodes[node] = id
@@ -45,7 +60,6 @@ class DebugGraphViewer(Generic[N, E]):
     def explore_edge(self, edge: E) -> None:
         if edge in self._visited_edges:
             return
-        print(f"at {edge=}")
         self._visited_edges.add(edge)
         start = self.explore_node(edge.previous)
         end = self.explore_node(edge.next)
@@ -59,22 +73,34 @@ class DebugGraphViewer(Generic[N, E]):
             self._graph,
             self._layout,
             edgelist=edge_list,
-            connectionstyle="arc3" if rad == 0 else f"arc3, rad = {rad}")
+            connectionstyle="arc3" if rad == 0 else f"arc3, rad = {rad}",
+            node_size=300 // math.log(self._graph.number_of_nodes()))
         labels = {(x, y, key): label for x, y, key, label in edges}
         networkx_curved_label.draw_networkx_edge_labels(
             self._graph,
             self._layout,
             labels,
-            rad=rad)
+            rad=rad,
+            font_size=30 // (math.log(self._graph.number_of_nodes())))
 
-    def display(self):
+    def render(self) -> matplotlib.figure.Figure:
+        fig = matplotlib.pyplot.figure()
         # We need to display graph in multiple batches. This allows us
         # to draw multi- and directional- connections without overlap.
         # Inspired by: https://stackoverflow.com/a/70245742
-        self._layout = networkx.layout.kamada_kawai_layout(self._graph)
+        self._layout = networkx.layout.fruchterman_reingold_layout(self._graph)
+        colors = {
+            node: self._color_overrides[node]
+            if node in self._color_overrides
+            else (0.3, 0.3, 1.0)
+            for node in self._graph.nodes
+        }
         networkx.draw_networkx_nodes(
             self._graph,
-            self._layout)
+            self._layout,
+            nodelist=list(colors.keys()),
+            node_color=list(colors.values()),
+            node_size=100 // math.log(self._graph.number_of_nodes()))
         # A list of edges for each connection between nodes
         edges_by_connection: dict[tuple[int, int],
                                   list[tuple[int, int, int]]] = {}
@@ -96,7 +122,7 @@ class DebugGraphViewer(Generic[N, E]):
 
         complex_edges = [i for i in edges_by_connection.values()
                          if len(i) > 1 and i[0][0] != i[0][1]]
-        rad = 0.25
+        rad = 0.5  # * math.log(self._graph.number_of_nodes())
         while complex_edges:
             edges_at_lvl = []
             alt_edges_at_lvl = []
@@ -125,24 +151,62 @@ class DebugGraphViewer(Generic[N, E]):
 
         self._display_edges(simple_edges)
 
-        # curved_edges = [
-        #     edge for edge in G.edges() if reversed(edge) in G.edges()]
-        # straight_edges = list(set(G.edges()) - set(curved_edges))
-        # nx.draw_networkx_edges(G, pos, ax=ax, edgelist=straight_edges)
-        # arc_rad = 0.25
-        # nx.draw_networkx_edges(
-        #     G, pos, ax=ax, edgelist=curved_edges, connectionstyle=f'arc3, rad = {arc_rad}')
+        return fig
 
-        # networkx.draw_networkx(
-        #     self._graph,
-        #     layout,
-        #     connectionstyle='arc3, rad = 0.1')
-        # networkx.draw_networkx_edge_labels(
-        #     self._graph,
-        #     layout,
-        #     self._labels)
+    @staticmethod
+    def display():
         matplotlib.pyplot.show()
 
+
+class MultiFigureViewer:
+    _current: int
+    _figures: list[matplotlib.figure.Figure]
+    _buttons: dict[matplotlib.figure.Figure, tuple[Button, Button]]
+    _last_fig: matplotlib.figure.Figure
+    _btn_fig: matplotlib.figure.Figure
+
+    def __init__(self) -> None:
+        self._figures = []
+        self._buttons = {}
+        self._current = 0
+        self._last_fig = None
+
+    def add(self, fig: matplotlib.figure.Figure):
+        fig.subplots_adjust(bottom=0.2)
+
+        axprev = fig.add_axes([0.7, 0.05, 0.1, 0.075])
+        axnext = fig.add_axes([0.81, 0.05, 0.1, 0.075])
+
+        btn_next = Button(axnext, 'Next')
+        btn_next.on_clicked(self.next)
+        btn_prev = Button(axprev, 'Previous')
+        btn_prev.on_clicked(self.prev)
+        self._buttons[fig] = btn_next, btn_prev
+
+        self._figures.append(fig)
+
+    def next(self, e):
+        self._current += 1
+        if self._current >= len(self._figures):
+            self._current = 0
+        self._display()
+
+    def prev(self, e):
+        self._current -= 1
+        if self._current < 0:
+            self._current = len(self._figures) - 1
+        self._display()
+
+    def _display(self):
+        if self._last_fig is not None:
+            self._last_fig.canvas.manager.destroy()
+        self._last_fig = self._figures[self._current]
+        self._last_fig.show()
+
+    def display(self):
+        self._current = len(self._figures) - 1
+        self._display()
+        matplotlib.pyplot.get_current_fig_manager().start_main_loop()
 
 if __name__ == "__main__":
     class TestEdge:
@@ -190,4 +254,5 @@ if __name__ == "__main__":
     n3.connect(n4, "reverse")
     n3.connect(n5, "end")
     n4.connect(n5, "end")
-    DebugGraphViewer(n1).display()
+    DebugGraphViewer(n1).render()
+    DebugGraphViewer.display()

@@ -1,189 +1,40 @@
-from enum import IntFlag, auto
 import functools
-from typing import Callable, overload
+from typing import Callable
 
-from funcutil import *
-
-if __name__ == "__main__":
-    print("WARNING: This package is made to be imported not run directly")
-    try:
-        import networkx
-        import matplotlib.pyplot as plt
-    except ImportError:
-        print("If you wish to proceed to display the debug graphic, "
-              "`$ pip install networkx` and `$ pip install matplotlib`")
+from funcutil import extend, negate
+from regexutil import CaptureGroup, State, Edge, MatchConditions, \
+    _parser_symbols, _parser_symbols_escaped
 
 
-class RegexFlags(IntFlag):
-    GLOBAL = auto()
-    MULTILINE = auto()
-    CASE_SENSATIVE = auto()
+class Regex:
+    _start: State
+    _end: State
+    # _flags: RegexFlags
+    # _capture_groups: set[CaptureGroup]
 
+    def __init__(self, start, end) -> None:
+        self._start = start
+        self._end = end
 
-parser_symbols: dict[str, Callable[['MatchStream'], bool]] = {}
-parser_symbols_escaped: dict[str, Callable[['MatchStream'], bool]] = {}
-
-
-def represented_by(
-        func: Callable[['MatchStream'], bool],
-        symbol: str,
-        *, escaped: bool = False):
-    if escaped:
-        parser_symbols_escaped[symbol] = func
-    else:
-        parser_symbols[symbol] = func
-    return func
-
-
-class MatchStream:
-    _alpha = {chr(i) for i in range(ord('a'), ord('z') + 1)}
-    _digits = {chr(i) for i in range(ord('0'), ord('9') + 1)}
-
-    _string: str
-    _cursor: int
-
-    def try_consume(self, *, match_string: str) -> bool:
-        if self._string[self._cursor:][0:len(match_string)] == match_string:
-            self._cursor += len(match_string)
-            return True
-        return False
-    
-    def try_consume_any(self, *, match_set: set[str]) -> bool:
-        if self._string[self._cursor:][0] in match_set:
-            self._cursor += 1
-            return True
-        return False
-    
-    # https://en.wikipedia.org/wiki/Nondeterministic_finite_automaton#%CE%B5-closure_of_a_state_or_set_of_states
-    def epsilon_transition(self) -> bool:
-        return True
-
-# region regex tokens
-    @represented_by("d", escaped=True)
-    @extend(try_consume_any, _digits)
-    def consume_digit(self): pass
-
-    @represented_by("D", escaped=True)
-    @negate
-    @extend(consume_digit)
-    def consume_not_digit(self): pass
-
-    @represented_by("w", escaped=True)
-    @extend(try_consume_any, _alpha + _digits + {"_"})
-    def consume_alphanum(self): pass
-
-    @represented_by("W", escaped=True)
-    @negate
-    @extend(consume_alphanum)
-    def consume_not_alphanum(self): pass
-
-    @represented_by("s", escaped=True)
-    @extend(try_consume_any, set(" \r\n\t\v\f"))
-    def consume_whitespace(self): pass
-
-    @represented_by("S", escaped=True)
-    @negate
-    @extend(consume_whitespace)
-    def consume_not_whitespace(self): pass
-
-    @extend(try_consume_any, set("\r\n"))
-    def consume_newline(self): pass
-
-    @represented_by(".")
-    @negate
-    @extend(consume_newline)
-    def consume_not_newline(self): pass
-
-    @represented_by("Z", escaped=True)
-    @represented_by("$")
-    def end(self) -> bool:
-        return self._cursor >= len(self._string)
-
-    @represented_by("A", escaped=True)
-    @represented_by("^")
     def begin(self):
-        return self._cursor <= 0
-# endregion regex tokens
+        return self._start
 
-
-class CaptureGroup:
-    _groups = {}
-    id: int | str
-
-    @staticmethod
-    def group_for(id: int | str):
-        if id in CaptureGroup._groups:
-            return CaptureGroup._groups[id]
-        else:
-            new_group = CaptureGroup(id)
-            CaptureGroup._groups[id] = new_group 
-            return new_group
-
-class State:
-    next: set['Edge']
-    previous: set['Edge']
-
-    def __init__(self):
-        self.next = {}
-        self.previous = {}
-
-    def clone(
-            self,
-            map_state: dict['State', 'State'],
-            map_path: dict['Edge', 'Edge']) -> 'State':
-        if (self in map_state):
-            return map_state[self]
-        new = State()
-        for path in self.next:
-            new.next.add(path.clone(map_state, map_path))
-        for path in self.previous:
-            new.previous.add(path.clone(map_state, map_path))
-        map_state[self] = new
-        return new
-
-
-class Edge:
-    next: State
-    previous: State
-
-    opens: list[CaptureGroup]
-    closes: list[CaptureGroup]
-
-    predicate: Callable[[MatchStream], bool]
-
-    @overload
-    def __init__(self): ...  # epsilon transition
-    @overload
-    def __init__(self, predicate: Callable[[MatchStream], bool]): ...
-
-    def __init__(self, *args) -> None:
-        match args:
-            case ():
-                self.predicate = MatchStream.epsilon_transition
-            case (Callable(predicate),):
-                self.predicate = predicate
-            case _:
-                raise TypeError("Inproper args to new Path()")
-
-    def clone(
-            self,
-            map_state: dict['Edge', 'Edge'],
-            map_path: dict['Edge', 'Edge']) -> 'Edge':
-        if (self in map_path):
-            return map_path[self]
-        new = Edge()
-        new.next = self.next.clone(map_state, map_path)
-        new.previous = self.previous.clone(map_state, map_path)
-        new.opens = self.opens
-        new.closes = self.closes
-        new.predicate = self.predicate
-        map_path[self] = new
-        return new
+    def end(self):
+        return self._end
 
 
 class RegexBuilder:
     class PatternParseError(Exception):
-        pass
+        message: str
+
+        def __init__(self, msg: str, e: Exception | None = None) -> None:
+            super().__init__(msg, e)
+            self.message = msg
+            self.__cause__ = e
+
+        def __str__(self) -> str:
+            return f"{self.message}Caused by "\
+                f"{self.__cause__.__class__.__name__}: {self.__cause__}"
 
     _special_chars = "\\.^$+*?[]{}()"
 
@@ -192,21 +43,22 @@ class RegexBuilder:
 
     _escaped: bool
     _start: State
+    _last_token: State
     _end: State
-    _path_ends: list[Edge]
+    _untied_ends: set[State]
 
-    def __init__(self, pattern: str):
+    _capture_auto_id: int
+
+    def __init__(self, pattern: str,
+                 *, _cid: int = 0):
         self._pattern = pattern
         self._cursor = 0
 
         self._escaped = False
-        self._path_ends = []
-        self._start = State()
+        self._start = self._last_token = self._end = State()
+        self._untied_ends = set()
 
-    def _append_path(self, path: Edge):
-        for end in self._path_ends:
-            end.next.append(path)
-            path.previous.append(path)
+        self._capture_auto_id = _cid
 
     def _consume_char(self) -> str:
         ch = self._pattern[self._cursor]
@@ -219,33 +71,194 @@ class RegexBuilder:
             return True
         return False
 
-    def build(self) -> Edge:
-        while self._cursor < len(self._pattern):
-            self._parse_char(self._consume_char())
+    def _consume_till_next(
+            self,
+            ch: str,
+            predicate: Callable[[], bool],
+            *, _open_ch_map={  # Static opject, initialized only once
+                ']': '[',
+                '}': '{',
+                ')': '(',
+                '>': '<'
+            }):
+        start_cur = self._cursor
+        try:
+            self._cursor = self._pattern.index(ch, self._cursor)
+            while not predicate():
+                self._cursor = self._pattern.index(ch, self._cursor + len(ch))
+            self._cursor += len(ch)
+            return self._pattern[start_cur:self._cursor - len(ch)]
+        except ValueError as e:
+            open_ch = f"'{_open_ch_map[ch]}'" if ch in _open_ch_map else '?'
+            raise RegexBuilder.PatternParseError(
+                f"""
+Could not find closing '{ch}' searching from opening
+{open_ch} at position {start_cur - 1}:
+"{self._pattern}"
+{' ' * start_cur}^ here
+""", e)
 
-    def _parse_char(self, char):
+    def _is_escaped(self):
+        cur = self._cursor
+        while self._pattern[:cur].endswith("\\\\"):
+            cur -= 2
+        return self._pattern[:cur].endswith("\\")
+
+    @negate
+    @extend(_is_escaped)
+    def _is_unescaped():
+        pass
+
+    @staticmethod
+    def _chars_from_char_class(class_specifier: str) -> set[str]:
+        """
+        Produces the set of all chars that satisfy the given regular
+        expression char. class specifier (see
+        https://www.rexegg.com/regex-quickstart.html#classes).
+
+        Arguments:
+            class_specifier -- the string representation of the char
+                class specifier, excluding the square brackets. e.g
+                "A-Z", "0-9a-z_", etc.
+
+        Returns:
+            A set of all the conforming characters.
+        """
+        # TODO: handle ;)
+        # ranges:
+        # {chr(i) for i in range(ord(start), ord(end) + 1)}
+
+    def build(self,
+              *, debug: Callable[[State], None] = lambda _: None,
+              _nested: bool = False) -> Regex:
+        while self._cursor < len(self._pattern):
+            debug(self._start)
+            if self._parse_char(self._consume_char(), _nested, debug=debug):
+                break
+        debug(self._start)
+        for end in self._untied_ends:
+            # connect to real end
+            e_move = Edge()
+            end.connect(e_move)
+            self._end.rconnect(e_move)
+            debug(self._start)
+        return Regex(self._start, self._end)
+
+    def _nested_build(self,
+                      debug: Callable[[State], None]) -> tuple[Regex, int, int]:
+        return (self.build(debug=debug, _nested=True),
+                self._cursor,
+                self._capture_auto_id)
+
+    def _append_edge(self, edge: Edge):
+        self._end.connect(edge)
+        self._last_token = self._end
+        self._end = State()
+        self._end.rconnect(edge)
+
+    def _append_regex(self, rx: Regex, group_id: CaptureGroup | None):
+        # e-move for sandboxing
+        sbx_edge = Edge()
+        if group_id is not None:
+            sbx_edge.opens.append(group_id)
+        self._append_edge(sbx_edge)
+        # Embed entire rx inside this
+        for edge in rx._start.next.copy():
+            # Steal edge from rx
+            self._end.connect(edge)
+        for edge in rx._start.previous.copy():
+            # Steal edge from rx
+            self._end.rconnect(edge)
+            # pass
+        self._end = State()
+        # e-move for sandboxing
+        sbx_edge = Edge()
+        if group_id is not None:
+            sbx_edge.closes.append(group_id)
+        rx.end().connect(sbx_edge)
+        self._end.rconnect(sbx_edge)
+
+    def _parse_char(self,
+                    char: str,
+                    nested: bool,
+                    debug: Callable[[State], None]):
         match char, self._escaped:
             case '\\', False:
                 self._escaped = True
-                return  # dont reset `escaped` flag
+                # early return; dont reset `escaped` flag
+                return False
+            # Special chars:
             # \A, \Z, \w, \d, etc...
-            case ch, True if ch in parser_symbols_escaped:
-                self._append_path(Edge(parser_symbols_escaped[ch]))
+            case ch, True if ch in _parser_symbols_escaped:
+                self._append_edge(Edge(_parser_symbols_escaped[ch]))
             # ^, $, ., etc...
-            case ch, False if ch in parser_symbols:
-                self._append_path(Edge(parser_symbols[ch]))
-            # all other chars
+            case ch, False if ch in _parser_symbols:
+                self._append_edge(Edge(_parser_symbols[ch]))
+            case '?', False:  # Make _last_token optional
+                new = Edge()
+                self._last_token.connect(new)
+                self._end.rconnect(new)
+            case '+', False:  # Repeat 1+ times quantifier
+                new = Edge()
+                self._last_token.rconnect(new)
+                self._end.connect(new)
+            case '*', False:  # Repeat 0+ times quantifier
+                # Optional
+                new = Edge()
+                self._last_token.connect(new)
+                self._end.rconnect(new)
+                # Repeated
+                new = Edge()
+                self._last_token.rconnect(new)
+                self._end.connect(new)
+            case '[', False:  # Character class specifiers
+                cls_specifier = self._consume_till_next(
+                    ']', self._is_unescaped)
+                chars = self._chars_from_char_class(cls_specifier)
+                self._append_edge(Edge(functools.partial(
+                    MatchConditions.try_consume, match_set=chars)))
+            case '{', False:  # n-quantifier
+                quantity = self._consume_till_next('}', self._is_unescaped)
+                # TODO: handle ;)
+            case '(', False:  # group
+                # Capture group time!
+                capture_group: CaptureGroup | None = None
+                if self._try_consume("?:"):
+                    # Non-capturing group
+                    pass
+                elif self._try_consume("?<") or self._try_consume("?P<"):
+                    # Named capture group
+                    capture_group = self._consume_till_next('>',
+                                                            lambda: True)
+                else:
+                    # Capturing group
+                    self._capture_auto_id += 1
+                    capture_group = self._capture_auto_id
+                inner_group, skip_to, self._capture_auto_id = RegexBuilder(
+                    self._pattern[self._cursor:],
+                    _cid=self._capture_auto_id)._nested_build(debug)
+                self._append_regex(inner_group, capture_group)
+                self._cursor += skip_to
+            case ')', False if nested:
+                # Exit parse loop early, jump to outer group
+                return True
+            case '|', False:  # or
+                # Two options:
+                # _start -> _end
+                # _end -> [end of parse]
+                # Connect first option to end
+                self._untied_ends.add(self._end)
+                # Start second option at _start,
+                # continue parsing from there
+                self._end = self._start
+            # All other chars:
             case (ch, _) if not self._escaped or ch in self._special_chars:
-                self._append_path(Edge(functools.partial(
-                    MatchStream.try_consume, match_char=ch)))
+                self._append_edge(Edge(functools.partial(
+                    MatchConditions.try_consume, match_char=ch)))
             case _:
-                raise RegexBuilder.PatternParseError()
+                bk = '\\'  # dumb python
+                raise RegexBuilder.PatternParseError(
+                    f"Unexpected sequence: "
+                    f"'{bk if self._escaped else ''}{char}'")
         self._escaped = False
-
-
-def main():
-    RegexBuilder(r"\w+@\w+\.").build()
-
-
-if __name__ == "__name__":
-    main()
+        return False
