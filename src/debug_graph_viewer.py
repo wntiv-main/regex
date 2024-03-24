@@ -84,11 +84,11 @@ class DebugGraphViewer(Generic[N, E]):
             font_size=30 // (math.log(self._graph.number_of_nodes())))
 
     def render(self) -> matplotlib.figure.Figure:
-        fig = matplotlib.pyplot.figure()
+        fig = matplotlib.pyplot.figure(layout='tight')
         # We need to display graph in multiple batches. This allows us
         # to draw multi- and directional- connections without overlap.
         # Inspired by: https://stackoverflow.com/a/70245742
-        self._layout = networkx.layout.fruchterman_reingold_layout(self._graph)
+        self._layout = self._layout_planner(self._graph)
         colors = {
             node: self._color_overrides[node]
             if node in self._color_overrides
@@ -161,12 +161,14 @@ class DebugGraphViewer(Generic[N, E]):
 class MultiFigureViewer:
     _current: int
     _figures: list[matplotlib.figure.Figure]
+    _visited: set[matplotlib.figure.Figure]
     _buttons: dict[matplotlib.figure.Figure, tuple[Button, Button]]
     _last_fig: matplotlib.figure.Figure
     _btn_fig: matplotlib.figure.Figure
 
     def __init__(self) -> None:
         self._figures = []
+        self._visited = set()
         self._buttons = {}
         self._current = 0
         self._last_fig = None
@@ -182,6 +184,21 @@ class MultiFigureViewer:
         btn_prev = Button(axprev, 'Previous')
         btn_prev.on_clicked(self.prev)
         self._buttons[fig] = btn_next, btn_prev
+
+        # Maximize window:
+        # https://stackoverflow.com/questions/12439588/how-to-maximize-a-plt-show-window
+        match matplotlib.get_backend():
+            # fig.canvas.manager.window.maximize()
+            case 'Qt4Agg' | 'QtAgg':
+                pass  # Handled later
+            case  'wxAgg':
+                fig.canvas.manager.frame.Maximize(True)
+            case 'TkAgg':
+                try:
+                    fig.canvas.manager.window.state('zoomed')
+                except Exception:
+                    fig.canvas.manager.resize(
+                        *fig.canvas.manager.window.maxsize())
 
         self._figures.append(fig)
 
@@ -199,14 +216,32 @@ class MultiFigureViewer:
 
     def _display(self):
         if self._last_fig is not None:
-            self._last_fig.canvas.manager.destroy()
+            # Hacks, just hope this works
+            self._last_fig.canvas.manager.window.close()
         self._last_fig = self._figures[self._current]
         self._last_fig.show()
+        if (self._last_fig not in self._visited
+                and matplotlib.get_backend() == 'QtAgg'):
+            self._last_fig.canvas.manager.window.showMaximized()
+        self._visited.add(self._last_fig)
 
     def display(self):
         self._current = len(self._figures) - 1
         self._display()
         matplotlib.pyplot.get_current_fig_manager().start_main_loop()
+
+
+def test_layouts_for(start: N, end: N | None = None):
+    view = MultiFigureViewer()
+    for name in networkx.layout.__all__:
+        try:
+            layout = getattr(networkx.layout, name)
+            fig = DebugGraphViewer(start, end, layout).render()
+            fig.canvas.manager.set_window_title(name)
+        except Exception:
+            continue
+        view.add(fig)
+    view.display()
 
 if __name__ == "__main__":
     class TestEdge:
