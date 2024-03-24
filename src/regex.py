@@ -40,6 +40,7 @@ class RegexBuilder:
 
     _pattern: str
     _cursor: int
+    _cursor_started: int
 
     _escaped: bool
     _start: State
@@ -50,9 +51,12 @@ class RegexBuilder:
     _capture_auto_id: int
 
     def __init__(self, pattern: str,
-                 *, _cid: int = 0):
+                 *, _cursor: int = 0,
+                 _open_bracket_pos: int = 0,
+                 _cid: int = 0):
         self._pattern = pattern
-        self._cursor = 0
+        self._cursor = _cursor
+        self._cursor_started = _open_bracket_pos
 
         self._escaped = False
         self._start = self._last_token = self._end = State()
@@ -71,42 +75,58 @@ class RegexBuilder:
             return True
         return False
 
-    def _consume_till_next(
+    def _find_next(
             self,
             ch: str,
-            predicate: Callable[[], bool],
-            *, _open_ch_map={  # Static opject, initialized only once
+            predicate: Callable[[int], bool],
+            *, _started_at: int | None = None,
+            _open_ch_map={  # Static opject, initialized only once
                 ']': '[',
                 '}': '{',
                 ')': '(',
                 '>': '<'
             }):
-        start_cur = self._cursor
+        if _started_at is None:
+            _started_at = self._cursor
         try:
-            self._cursor = self._pattern.index(ch, self._cursor)
-            while not predicate():
-                self._cursor = self._pattern.index(ch, self._cursor + len(ch))
-            self._cursor += len(ch)
-            return self._pattern[start_cur:self._cursor - len(ch)]
+            current_attempt = self._pattern.index(ch, self._cursor)
+            while not predicate(current_attempt):
+                current_attempt = self._pattern.index(
+                    ch, current_attempt + len(ch))
+            return current_attempt
         except ValueError as e:
-            open_ch = f"'{_open_ch_map[ch]}'" if ch in _open_ch_map else '?'
-            raise RegexBuilder.PatternParseError(
-                f"""
-Could not find closing '{ch}' searching from opening
-{open_ch} at position {start_cur - 1}:
+            if ch in _open_ch_map:
+                raise RegexBuilder.PatternParseError(
+                    f"""Could not find closing '{ch}' for opening \
+'{_open_ch_map[ch]}' at position {_started_at}:
 "{self._pattern}"
-{' ' * start_cur}^ here
+ {' ' * _started_at}^ here
+""", e)
+            else:
+                raise RegexBuilder.PatternParseError(
+                    f"""Could not find '{ch}' searching from position \
+{_started_at}:
+"{self._pattern}"
+ {' ' * _started_at}^ here
 """, e)
 
-    def _is_escaped(self):
-        cur = self._cursor
-        while self._pattern[:cur].endswith("\\\\"):
-            cur -= 2
-        return self._pattern[:cur].endswith("\\")
+    def _consume_till_next(
+            self,
+            ch: str,
+            predicate: Callable[[int], bool]):
+        find_index = self._find_next(ch, predicate)
+        result = self._pattern[self._cursor:find_index]
+        self._cursor = find_index + len(ch)
+        return result
+
+    def _is_escaped(self, at: int):
+        while self._pattern[:at].endswith("\\\\"):
+            at -= 2
+        return self._pattern[:at].endswith("\\")
 
     @negate
     @extend(_is_escaped)
-    def _is_unescaped():
+    def _is_unescaped(self, at: int):
         pass
 
     @staticmethod
@@ -143,12 +163,6 @@ Could not find closing '{ch}' searching from opening
             self._end.rconnect(e_move)
             debug(self._start)
         return Regex(self._start, self._end)
-
-    def _nested_build(self,
-                      debug: Callable[[State], None]) -> tuple[Regex, int, int]:
-        return (self.build(debug=debug, _nested=True),
-                self._cursor,
-                self._capture_auto_id)
 
     def _append_edge(self, edge: Edge):
         self._end.connect(edge)
@@ -202,6 +216,8 @@ Could not find closing '{ch}' searching from opening
                 new = Edge()
                 self._last_token.rconnect(new)
                 self._end.connect(new)
+                # sandbox to prevend out-of-order-ing sequenced loops
+                self._append_edge(Edge())
             case '*', False:  # Repeat 0+ times quantifier
                 # Optional
                 new = Edge()
@@ -211,6 +227,8 @@ Could not find closing '{ch}' searching from opening
                 new = Edge()
                 self._last_token.rconnect(new)
                 self._end.connect(new)
+                # sandbox to prevend out-of-order-ing sequenced loops
+                self._append_edge(Edge())
             case '[', False:  # Character class specifiers
                 cls_specifier = self._consume_till_next(
                     ']', self._is_unescaped)
@@ -221,6 +239,7 @@ Could not find closing '{ch}' searching from opening
                 quantity = self._consume_till_next('}', self._is_unescaped)
                 # TODO: handle ;)
             case '(', False:  # group
+                start_pos = self._cursor - 1
                 # Capture group time!
                 capture_group: CaptureGroup | None = None
                 if self._try_consume("?:"):
@@ -228,17 +247,28 @@ Could not find closing '{ch}' searching from opening
                     pass
                 elif self._try_consume("?<") or self._try_consume("?P<"):
                     # Named capture group
-                    capture_group = self._consume_till_next('>',
-                                                            lambda: True)
+                    capture_group = self._consume_till_next(
+                        '>', lambda _: True)
                 else:
                     # Capturing group
                     self._capture_auto_id += 1
                     capture_group = self._capture_auto_id
-                inner_group, skip_to, self._capture_auto_id = RegexBuilder(
-                    self._pattern[self._cursor:],
-                    _cid=self._capture_auto_id)._nested_build(debug)
+                # Ensure that capture group will have closing bracket
+                _ = self._find_next(')', self._is_unescaped)
+                inner_builder = RegexBuilder(
+                    self._pattern,
+                    _cursor=self._cursor,
+                    _open_bracket_pos=start_pos,
+                    _cid=self._capture_auto_id)
+                inner_group = inner_builder.build(debug=debug, _nested=True)
+                # Copy new state
+                self._cursor = inner_builder._cursor
+                self._capture_auto_id = inner_builder._capture_auto_id
                 self._append_regex(inner_group, capture_group)
-                self._cursor += skip_to
+                if nested:
+                    # Ensure that we still also have closing bracket
+                    _ = self._find_next(')', self._is_unescaped,
+                                        _started_at=self._cursor_started)
             case ')', False if nested:
                 # Exit parse loop early, jump to outer group
                 return True
