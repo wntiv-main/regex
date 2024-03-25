@@ -139,6 +139,7 @@ CaptureGroup: TypeAlias = int | str
 
 
 class State:
+    _replaced_with: 'State | None' = None
     next: set['Edge']
     previous: set['Edge']
 
@@ -166,6 +167,13 @@ class State:
         self.previous.discard(edge)
         edge.next = None
 
+    def merge(self, other: 'State'):
+        for edge in other.previous.copy():
+            self.rconnect(edge)
+        for edge in other.next.copy():
+            self.connect(edge)
+        other._replaced_with = self
+
     def clone(
             self,
             map_state: dict['State', 'State'],
@@ -185,8 +193,8 @@ class Edge:
     next: State
     previous: State
 
-    opens: list[CaptureGroup]
-    closes: list[CaptureGroup]
+    opens: set[CaptureGroup]
+    closes: set[CaptureGroup]
 
     predicate: MatchPredicate
 
@@ -198,8 +206,8 @@ class Edge:
     def __init__(self, *args) -> None:
         self.next = None
         self.previous = None
-        self.opens = []
-        self.closes = []
+        self.opens = set()
+        self.closes = set()
         match args:
             case ():
                 self.predicate = MatchConditions.epsilon_transition
@@ -237,6 +245,16 @@ class Edge:
         if self.opens or self.closes:
             result += f", ({self.opens};{self.closes})"
         return result
+
+    def remove(self):
+        if self.previous is None:
+            print(f"WARN: {self.previous=}")
+        else:
+            self.previous.disconnect(self)
+        if self.next is None:
+            print(f"WARN: {self.next=}")
+        else:
+            self.next.rdisconnect(self)
 
     def clone(
             self,

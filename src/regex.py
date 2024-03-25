@@ -22,15 +22,66 @@ class Regex:
     def end(self):
         return self._end
     
-    def walk_graph(self, visitor: Callable[[Edge], None]) \
-            -> Callable[['Regex'], None]:
-        pass
+    def walk_graph(
+            self,
+            visitor: Callable[[Edge], State],
+            *args, _start: State | None = None,
+            _visited: set[State] | None = None) -> Callable[['Regex'], None]:
+        print(f"walking {_start}")
+        if _start is None:
+            _start = self._start
+        if _visited is None:
+            _visited = set()
+        if _start in _visited:
+            return
+        _visited.add(_start)
+        for edge in _start.next.copy():
+            next = visitor(edge, *args)
+            if next == _start:
+                _visited.discard(_start)
+            if next is not None:
+                self.walk_graph(visitor,
+                                _start=next,
+                                _visited=_visited)
+            visitor(edge, *args)  # Walk back up graph too
+        while self._start._replaced_with is not None:
+            self._start = self._start._replaced_with
+        while self._end._replaced_with is not None:
+            self._end = self._end._replaced_with
 
     @wrap_method(walk_graph)
-    def epsilon_closure(edge: Edge):
-        # e-move -> single_input
-        # single_output
-        pass
+    def epsilon_closure(edge: Edge, debug=lambda _: None):
+        # self-epsilon-loops
+        if (edge.predicate == MatchConditions.epsilon_transition
+                and edge.previous == edge.next):
+            debug(edge.previous)
+            next_state = edge.previous
+            edge.remove()
+            return next_state
+        # transfer capture groups to non-epsilon transitions
+        if edge.predicate == MatchConditions.epsilon_transition:
+            if edge.opens and len(edge.next.previous) == 1:
+                for path in edge.next.next:
+                    path.opens |= edge.opens
+            if edge.closes and len(edge.previous.next) == 1:
+                for path in edge.previous.previous:
+                    path.closes |= edge.closes
+        # merge states connected by e-moves
+        if (edge.predicate == MatchConditions.epsilon_transition
+            and (len(edge.previous.next) == 1
+                 or len(edge.next.previous) == 1)
+                and not (edge.opens or edge.closes)):
+            debug(edge.previous)
+            print(f"{edge}: merged {edge.next} with {edge.previous}")
+            next_state = edge.previous
+            edge.previous.merge(edge.next)
+            edge.remove()
+            return next_state
+        # TODO: epsilon-rings
+        # TODO: minification
+        if edge.next != edge.previous:
+            return edge.next
+        return None
 
 
 class RegexBuilder:
@@ -162,17 +213,17 @@ class RegexBuilder:
               *, debug: Callable[[State], None] = lambda _: None,
               _nested: bool = False) -> Regex:
         while self._cursor < len(self._pattern):
-            debug(self._start)
-            if self._parse_char(self._consume_char(), _nested, debug=debug):
+            if self._parse_char(self._consume_char(), _nested):
                 break
-        debug(self._start)
         for end in self._untied_ends:
             # connect to real end
             e_move = Edge()
             end.connect(e_move)
             self._end.rconnect(e_move)
-            debug(self._start)
-        return Regex(self._start, self._end)
+        result = Regex(self._start, self._end)
+        if not _nested:
+            result.epsilon_closure(debug)
+        return result
 
     def _append_edge(self, edge: Edge):
         self._end.connect(edge)
@@ -184,7 +235,7 @@ class RegexBuilder:
         # e-move for sandboxing
         sbx_edge = Edge()
         if group_id is not None:
-            sbx_edge.opens.append(group_id)
+            sbx_edge.opens.add(group_id)
         self._append_edge(sbx_edge)
         # Embed entire rx inside this
         for edge in rx._start.next.copy():
@@ -198,14 +249,13 @@ class RegexBuilder:
         # e-move for sandboxing
         sbx_edge = Edge()
         if group_id is not None:
-            sbx_edge.closes.append(group_id)
+            sbx_edge.closes.add(group_id)
         rx.end().connect(sbx_edge)
         self._end.rconnect(sbx_edge)
 
     def _parse_char(self,
                     char: str,
-                    nested: bool,
-                    debug: Callable[[State], None]):
+                    nested: bool):
         match char, self._escaped:
             case '\\', False:
                 self._escaped = True
@@ -229,14 +279,17 @@ class RegexBuilder:
                 # sandbox to prevend out-of-order-ing sequenced loops
                 self._append_edge(Edge())
             case '*', False:  # Repeat 0+ times quantifier
-                # Optional
-                new = Edge()
-                self._last_token.connect(new)
-                self._end.rconnect(new)
-                # Repeated
-                new = Edge()
-                self._last_token.rconnect(new)
-                self._end.connect(new)
+                # # Optional
+                # new = Edge()
+                # self._last_token.connect(new)
+                # self._end.rconnect(new)
+                # # Repeated
+                # new = Edge()
+                # self._last_token.rconnect(new)
+                # self._end.connect(new)
+                # Start and end of loop are same state
+                self._last_token.merge(self._end)
+                self._end = self._last_token
                 # sandbox to prevend out-of-order-ing sequenced loops
                 self._append_edge(Edge())
             case '[', False:  # Character class specifiers
@@ -270,7 +323,7 @@ class RegexBuilder:
                     _cursor=self._cursor,
                     _open_bracket_pos=start_pos,
                     _cid=self._capture_auto_id)
-                inner_group = inner_builder.build(debug=debug, _nested=True)
+                inner_group = inner_builder.build(_nested=True)
                 # Copy new state
                 self._cursor = inner_builder._cursor
                 self._capture_auto_id = inner_builder._capture_auto_id

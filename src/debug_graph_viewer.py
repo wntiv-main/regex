@@ -40,9 +40,8 @@ class DebugGraphViewer(Generic[N, E]):
         self._graph = networkx.MultiDiGraph()
         self._layout = None
         self._layout_planner = layout
-        self._color_overrides = {
-            self.explore_node(start): (1.0, 0.3, 0.3)
-        }
+        self._color_overrides = {}
+        self._color_overrides[self.explore_node(start)] = (1.0, 0.3, 0.3)
         if end is not None:
             self._color_overrides[self.explore_node(end)] = (0.3, 1.0, 0.3)
 
@@ -53,10 +52,14 @@ class DebugGraphViewer(Generic[N, E]):
         self._auto_increment_id += 1
         self._visited_nodes[node] = id
         self._graph.add_node(id)
-        for edge in node.next:
-            self.explore_edge(edge)
-        for edge in node.previous:
-            self.explore_edge(edge)
+        if node is None:
+            # Exceptional case
+            self._color_overrides[id] = (1.0, 0.0, 0.0)
+        else:
+            for edge in node.next:
+                self.explore_edge(edge)
+            for edge in node.previous:
+                self.explore_edge(edge)
         return id
 
     def explore_edge(self, edge: E) -> None:
@@ -76,14 +79,14 @@ class DebugGraphViewer(Generic[N, E]):
             self._layout,
             edgelist=edge_list,
             connectionstyle="arc3" if rad == 0 else f"arc3, rad = {rad}",
-            node_size=300 // math.log(self._graph.number_of_nodes()))
+            node_size=300 // math.sqrt(self._graph.number_of_nodes()))
         labels = {(x, y, key): label for x, y, key, label in edges}
         networkx_curved_label.draw_networkx_edge_labels(
             self._graph,
             self._layout,
             labels,
             rad=rad,
-            font_size=30 // (math.log(self._graph.number_of_nodes())))
+            font_size=30 // (math.sqrt(self._graph.number_of_nodes())))
 
     def render(self) -> matplotlib.figure.Figure:
         fig = matplotlib.pyplot.figure(layout='tight')
@@ -102,7 +105,7 @@ class DebugGraphViewer(Generic[N, E]):
             self._layout,
             nodelist=list(colors.keys()),
             node_color=list(colors.values()),
-            node_size=100 // math.log(self._graph.number_of_nodes()))
+            node_size=100 // math.sqrt(self._graph.number_of_nodes()))
         # A list of edges for each connection between nodes
         edges_by_connection: dict[tuple[int, int],
                                   list[tuple[int, int, int]]] = {}
@@ -236,12 +239,13 @@ class MultiFigureViewer:
 def test_layouts_for(start: N, end: N | None = None):
     view = MultiFigureViewer()
     for name in nxlayout.__all__:
+        layout = getattr(nxlayout, name)
+        viewer = DebugGraphViewer(start, end, layout)
         try:
-            layout = getattr(nxlayout, name)
-            fig = DebugGraphViewer(start, end, layout).render()
-            fig.canvas.manager.set_window_title(name)
+            fig = viewer.render()
         except Exception:
             continue
+        fig.canvas.manager.set_window_title(name)
         view.add(fig)
     view.display()
 
