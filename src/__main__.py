@@ -15,7 +15,8 @@ def main():
     mfv = MultiFigureViewer()
 
     rx = RegexBuilder(r"(?:a?b?c?)*").build(
-        debug=lambda s: mfv.add(DebugGraphViewer(s).render()))
+        debug=lambda s:
+        mfv.add(DebugGraphViewer(s).render()))
     mfv.add(DebugGraphViewer(rx.begin(), rx.begin()).render())
     mfv.display()
     # test_layouts_for(rx.begin(), rx.end())

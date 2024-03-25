@@ -168,11 +168,16 @@ class State:
         edge.next = None
 
     def merge(self, other: 'State'):
+        # TODO: remove duplicates
         for edge in other.previous.copy():
             self.rconnect(edge)
         for edge in other.next.copy():
             self.connect(edge)
         other._replaced_with = self
+
+    def clone_shallow(self) -> 'State':
+        # TODO:
+        pass
 
     def clone(
             self,
@@ -245,6 +250,18 @@ class Edge:
         if self.opens or self.closes:
             result += f", ({self.opens};{self.closes})"
         return result
+
+    def connect(self, state: State):
+        state.rconnect(self)
+
+    def disconnect(self):
+        self.next.rdisconnect(self)
+
+    def rconnect(self, state: State):
+        state.connect(self)
+
+    def rdisconnect(self):
+        self.previous.disconnect(self)
 
     def remove(self):
         if self.previous is None:

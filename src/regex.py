@@ -30,6 +30,8 @@ class Regex:
         print(f"walking {_start}")
         if _start is None:
             _start = self._start
+        while _start._replaced_with is not None:
+            _start = _start._replaced_with
         if _visited is None:
             _visited = set()
         if _start in _visited:
@@ -40,10 +42,13 @@ class Regex:
             if next == _start:
                 _visited.discard(_start)
             if next is not None:
-                self.walk_graph(visitor,
+                self.walk_graph(visitor, *args,
                                 _start=next,
                                 _visited=_visited)
-            visitor(edge, *args)  # Walk back up graph too
+                if next == _start or _start._replaced_with is not None:
+                    return
+            # if edge.next is not None or edge.previous is not None:
+            #     visitor(edge, *args)  # Walk back up graph too
         while self._start._replaced_with is not None:
             self._start = self._start._replaced_with
         while self._end._replaced_with is not None:
@@ -66,6 +71,12 @@ class Regex:
             if edge.closes and len(edge.previous.next) == 1:
                 for path in edge.previous.previous:
                     path.closes |= edge.closes
+        # strategy for removing enclosed e-moves: split their end-state
+        # into 2 - one for the e-move, one for the other connections
+        if (edge.predicate == MatchConditions.epsilon_transition
+                and len(edge.previous.next) > 1
+                and len(edge.next.previous) > 1):
+            edge.connect(edge.next.clone_shallow())
         # merge states connected by e-moves
         if (edge.predicate == MatchConditions.epsilon_transition
             and (len(edge.previous.next) == 1
@@ -73,16 +84,19 @@ class Regex:
                 and not (edge.opens or edge.closes)):
             debug(edge.previous)
             print(f"{edge}: merged {edge.next} with {edge.previous}")
-            next_state = edge.previous
-            edge.previous.merge(edge.next)
+            next_state = edge.next
+            edge.next.merge(edge.previous)
             edge.remove()
             return next_state
-        # TODO: epsilon-rings
-        # TODO: minification
+
         if edge.next != edge.previous:
             return edge.next
         return None
 
+    @wrap_method(walk_graph)
+    def minify(edge: Edge, debug=lambda _: None):
+        # TODO: minification
+        pass
 
 class RegexBuilder:
     class PatternParseError(Exception):
