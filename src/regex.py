@@ -56,6 +56,11 @@ class Regex:
 
     @wrap_method(walk_graph)
     def epsilon_closure(edge: Edge, debug=lambda _: None):
+        if edge.previous is not None:
+            for other in edge.previous.next.copy():
+                # Remove duplicates
+                if other != edge and other.approx_equals(edge):
+                    other.remove()
         # self-epsilon-loops
         if (edge.predicate == MatchConditions.epsilon_transition
                 and edge.previous == edge.next):
@@ -76,7 +81,8 @@ class Regex:
         if (edge.predicate == MatchConditions.epsilon_transition
                 and len(edge.previous.next) > 1
                 and len(edge.next.previous) > 1):
-            edge.connect(edge.next.clone_shallow())
+            debug(edge.previous)
+            edge.connect(edge.next.clone_shallow(reverse=False))
         # merge states connected by e-moves
         if (edge.predicate == MatchConditions.epsilon_transition
             and (len(edge.previous.next) == 1

@@ -175,9 +175,14 @@ class State:
             self.connect(edge)
         other._replaced_with = self
 
-    def clone_shallow(self) -> 'State':
-        # TODO:
-        pass
+    def clone_shallow(self, *, reverse: bool = True) -> 'State':
+        new = State()
+        for edge in self.next:
+            new.connect(edge.clone_shallow())
+        if reverse:
+            for edge in self.previous:
+                new.rconnect(edge.clone_shallow())
+        return new
 
     def clone(
             self,
@@ -273,6 +278,15 @@ class Edge:
         else:
             self.next.rdisconnect(self)
 
+    def clone_shallow(self) -> 'Edge':
+        new = Edge()
+        new.predicate = self.predicate
+        new.closes = self.closes
+        new.opens = self.opens
+        new.connect(self.next)
+        new.rconnect(self.previous)
+        return new
+
     def clone(
             self,
             map_state: dict['Edge', 'Edge'],
@@ -287,3 +301,21 @@ class Edge:
         new.predicate = self.predicate
         map_path[self] = new
         return new
+
+    def predicates_match(self, other: 'Edge') -> bool:
+        if self.predicate == other.predicate:
+            return True
+        if (isinstance(self.predicate, functools.partial)
+                and isinstance(other.predicate, functools.partial)
+                and self.predicate.func == other.predicate.func
+                and self.predicate.args == other.predicate.args
+                and self.predicate.keywords == other.predicate.keywords):
+            return True
+        return False
+
+    def approx_equals(self, other: 'Edge') -> bool:
+        return (self.next == other.next
+                and self.previous == other.previous
+                and self.opens == other.opens
+                and self.closes == other.closes
+                and self.predicates_match(other))
