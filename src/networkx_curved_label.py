@@ -7,11 +7,13 @@ def draw_networkx_edge_labels(
     G,
     pos,
     edge_labels=None,
+    edgelist=None,
     label_pos=0.5,
     font_size=10,
     font_color="k",
     font_family="sans-serif",
     font_weight="normal",
+    node_size=300,
     alpha=None,
     bbox=None,
     horizontalalignment="center",
@@ -97,6 +99,9 @@ def draw_networkx_edge_labels(
     import matplotlib.pyplot as plt
     import numpy as np
 
+    if edgelist is None:
+        edgelist = list(G.edges())
+
     if ax is None:
         ax = plt.gca()
     if edge_labels is None:
@@ -114,12 +119,24 @@ def draw_networkx_edge_labels(
         pos_1 = ax.transData.transform(np.array(pos[n1]))
         pos_2 = ax.transData.transform(np.array(pos[n2]))
         linear_mid = 0.5*pos_1 + 0.5*pos_2
+        v_shift = 0
+        if np.all(pos_1 == pos_2):
+            # Self-loop:
+            # Code from networkx.draw_networkx_edges    
+            edge_pos = np.asarray([(pos[e[0]], pos[e[1]]) for e in edgelist])
+            miny = np.amin(np.ravel(edge_pos[:, :, 1]))
+            maxy = np.amax(np.ravel(edge_pos[:, :, 1]))
+            h = maxy - miny
+            
+            selfloop_ht = 0.005 * node_size if h == 0 else h
+            v_shift = 10 * selfloop_ht
         d_pos = pos_2 - pos_1
         rotation_matrix = np.array([(0, 1), (-1, 0)])
         ctrl_1 = linear_mid + rad*rotation_matrix@d_pos
         ctrl_mid_1 = 0.5*pos_1 + 0.5*ctrl_1
         ctrl_mid_2 = 0.5*pos_2 + 0.5*ctrl_1
         bezier_mid = 0.5*ctrl_mid_1 + 0.5*ctrl_mid_2
+        bezier_mid += (0, v_shift)
         (x, y) = ax.transData.inverted().transform(bezier_mid)
 
         if rotate:

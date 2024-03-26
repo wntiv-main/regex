@@ -27,7 +27,6 @@ class Regex:
             visitor: Callable[[Edge], State],
             *args, _start: State | None = None,
             _visited: set[State] | None = None) -> Callable[['Regex'], None]:
-        print(f"walking {_start}")
         if _start is None:
             _start = self._start
         while _start._replaced_with is not None:

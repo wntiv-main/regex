@@ -85,6 +85,8 @@ class DebugGraphViewer(Generic[N, E]):
             self._graph,
             self._layout,
             labels,
+            edgelist=edge_list,
+            node_size=300 // math.sqrt(self._graph.number_of_nodes()),
             rad=rad,
             font_size=30 // (math.sqrt(self._graph.number_of_nodes())))
 
