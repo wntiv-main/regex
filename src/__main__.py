@@ -14,10 +14,15 @@ def main():
     #     r"(?:=>\s*(?P<rtype>\w+))?").build()
     mfv = MultiFigureViewer()
 
-    rx = RegexBuilder(r"(?:a?b?c?)*").build(
-        debug=lambda s:
-        mfv.add(DebugGraphViewer(s).render()))
+    def debug(s, e, lbl):
+        fig = DebugGraphViewer(s, e).render()
+        fig.canvas.manager.set_window_title(lbl)
+        mfv.add(fig)
+    # try:
+    rx = RegexBuilder(r"(?:a?b?c?)*l").build(
+        debug=debug)
     mfv.add(DebugGraphViewer(rx.begin(), rx.begin()).render())
+    # finally:
     mfv.display()
     # test_layouts_for(rx.begin(), rx.end())
 

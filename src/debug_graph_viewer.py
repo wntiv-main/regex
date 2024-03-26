@@ -46,12 +46,15 @@ class DebugGraphViewer(Generic[N, E]):
             self._color_overrides[self.explore_node(end)] = (0.3, 1.0, 0.3)
 
     def explore_node(self, node: N, color=None) -> int:
+        while (hasattr(node, "_replaced_with")
+                and node._replaced_with is not None):
+            node = node._replaced_with
         if node in self._visited_nodes:
             return self._visited_nodes[node]
         id = self._auto_increment_id
         self._auto_increment_id += 1
         self._visited_nodes[node] = id
-        self._graph.add_node(id)
+        self._graph.add_node(id, label=str(node))
         if node is None:
             # Exceptional case
             self._color_overrides[id] = (1.0, 0.0, 0.0)
@@ -108,6 +111,11 @@ class DebugGraphViewer(Generic[N, E]):
             nodelist=list(colors.keys()),
             node_color=list(colors.values()),
             node_size=100 // math.sqrt(self._graph.number_of_nodes()))
+        networkx.draw_networkx_labels(
+            self._graph,
+            self._layout,
+            labels={x: lbl for x, lbl in self._graph.nodes(data='label')},
+            font_size=15 // math.sqrt(self._graph.number_of_nodes()))
         # A list of edges for each connection between nodes
         edges_by_connection: dict[tuple[int, int],
                                   list[tuple[int, int, int]]] = {}

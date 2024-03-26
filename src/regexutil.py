@@ -178,10 +178,16 @@ class State:
     def clone_shallow(self, *, reverse: bool = True) -> 'State':
         new = State()
         for edge in self.next:
-            new.connect(edge.clone_shallow())
+            new_edge = edge.clone_shallow()
+            if new_edge.next == self:
+                new_edge.connect(new)
+            new_edge.rconnect(new)
         if reverse:
             for edge in self.previous:
-                new.rconnect(edge.clone_shallow())
+                new_edge = edge.clone_shallow()
+                if new_edge.previous == self:
+                    new_edge.rconnect(new)
+                new_edge.connect(new)
         return new
 
     def clone(

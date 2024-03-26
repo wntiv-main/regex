@@ -21,12 +21,13 @@ class Regex:
 
     def end(self):
         return self._end
-    
+
     def walk_graph(
             self,
-            visitor: Callable[[Edge], State],
+            visitor: Callable[[Edge], State | None],
             *args, _start: State | None = None,
-            _visited: set[State] | None = None) -> Callable[['Regex'], None]:
+            _visited: set[State] | None = None,
+            **kwargs) -> Callable[['Regex'], None]:
         if _start is None:
             _start = self._start
         while _start._replaced_with is not None:
@@ -37,16 +38,26 @@ class Regex:
             return
         _visited.add(_start)
         for edge in _start.next.copy():
-            next = visitor(edge, *args)
-            if next == _start:
-                _visited.discard(_start)
-            if next is not None:
+            while self._start._replaced_with is not None:
+                self._start = self._start._replaced_with
+            while self._end._replaced_with is not None:
+                self._end = self._end._replaced_with
+            if edge.next is None or edge.previous is None:
+                continue
+            visitor(
+                edge, *args, **kwargs,
+                _start=self._start, _end=self._end)
+            if edge.next is not None:
                 self.walk_graph(visitor, *args,
-                                _start=next,
+                                **kwargs,
+                                _start=edge.next,
                                 _visited=_visited)
-                if next == _start or _start._replaced_with is not None:
-                    return
-            # if edge.next is not None or edge.previous is not None:
+            else:
+                self.walk_graph(visitor, *args,
+                                **kwargs,
+                                _start=_start,
+                                _visited=_visited)
+                return
             #     visitor(edge, *args)  # Walk back up graph too
         while self._start._replaced_with is not None:
             self._start = self._start._replaced_with
@@ -54,19 +65,22 @@ class Regex:
             self._end = self._end._replaced_with
 
     @wrap_method(walk_graph)
-    def epsilon_closure(edge: Edge, debug=lambda _: None):
-        if edge.previous is not None:
-            for other in edge.previous.next.copy():
-                # Remove duplicates
-                if other != edge and other.approx_equals(edge):
-                    other.remove()
+    def epsilon_closure(
+            edge: Edge,
+            _start: State,
+            _end: State,
+            debug=lambda _: None):
+        # if edge.previous is not None:
+        for other in edge.previous.next.copy():
+            # Remove duplicates
+            if other != edge and other.approx_equals(edge):
+                other.remove()
         # self-epsilon-loops
         if (edge.predicate == MatchConditions.epsilon_transition
                 and edge.previous == edge.next):
-            debug(edge.previous)
             next_state = edge.previous
             edge.remove()
-            return next_state
+            debug(_start, _end, f"remove self-loop from {next_state}")
         # transfer capture groups to non-epsilon transitions
         if edge.predicate == MatchConditions.epsilon_transition:
             if edge.opens and len(edge.next.previous) == 1:
@@ -75,28 +89,37 @@ class Regex:
             if edge.closes and len(edge.previous.next) == 1:
                 for path in edge.previous.previous:
                     path.closes |= edge.closes
-        # strategy for removing enclosed e-moves: split their end-state
-        # into 2 - one for the e-move, one for the other connections
-        if (edge.predicate == MatchConditions.epsilon_transition
-                and len(edge.previous.next) > 1
-                and len(edge.next.previous) > 1):
-            debug(edge.previous)
-            edge.connect(edge.next.clone_shallow(reverse=False))
         # merge states connected by e-moves
         if (edge.predicate == MatchConditions.epsilon_transition
             and (len(edge.previous.next) == 1
                  or len(edge.next.previous) == 1)
                 and not (edge.opens or edge.closes)):
-            debug(edge.previous)
-            print(f"{edge}: merged {edge.next} with {edge.previous}")
-            next_state = edge.next
+            debug_str = f"{edge}: merge {edge.next} with {edge.previous}"
             edge.next.merge(edge.previous)
             edge.remove()
-            return next_state
+            debug(_start, _end, debug_str)
 
-        if edge.next != edge.previous:
-            return edge.next
-        return None
+    @wrap_method(walk_graph)
+    def extended_epsilon_closure(
+            edge: Edge,
+            _start: State,
+            _end: State,
+            debug=lambda _: None):
+        # strategy for removing enclosed e-moves: split their end-state
+        # into 2 - one for the e-move, one for the other connections
+        if (edge.predicate == MatchConditions.epsilon_transition
+                and len(edge.previous.next) > 1
+                and len(edge.next.previous) > 1
+                and edge.next != _end):
+            debug(_start, _end, f"{edge}: spliting {edge.next}")
+            new_state = edge.next.clone_shallow(reverse=False)
+            edge.previous.merge(new_state)
+            # if edge.next == _end:
+            #     new_edge = Edge()
+            #     new_state.connect(new_edge)
+            #     new_edge.connect(_end)
+            edge.remove()
+            debug(_start, _end, f"{edge}: split {edge.next} to {new_state}")
 
     @wrap_method(walk_graph)
     def minify(edge: Edge, debug=lambda _: None):
@@ -241,7 +264,9 @@ class RegexBuilder:
             self._end.rconnect(e_move)
         result = Regex(self._start, self._end)
         if not _nested:
-            result.epsilon_closure(debug)
+            result.epsilon_closure(debug=debug)
+            result.extended_epsilon_closure(debug=debug)
+            result.epsilon_closure(debug=debug)
         return result
 
     def _append_edge(self, edge: Edge):
