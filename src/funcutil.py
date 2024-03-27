@@ -22,22 +22,32 @@ class extend:
         self._func_impl = functools.partial(
             function_implementation, *args, **kwargs)
 
-    def __call__(self, func: Callable[[*TArgs2], None])\
+    def __call__(self, _: Callable[[*TArgs2], None])\
             -> Callable[[*TArgs2], T]:
         return self._func_impl
 
-WrappedFunction: TypeAlias = Callable[[*TArgs], T]
+
+WrappedFunction: TypeAlias = Callable[[*TArgs2], T2]
 InnerFunction: TypeAlias = Callable[[*TArgs], T]
-def wrap(wrapper_function: Callable[[Callable[[*TArgs2], T2], *TArgs], T])\
-        -> Callable[[InnerFunction], WrappedFunction]:
+
+
+def wrap(
+        wrapper_function: Callable[[InnerFunction, *TArgs2], T2],
+        *args,
+        **kwargs) -> Callable[[InnerFunction], WrappedFunction]:
     def wrap_decorator(inner_function: InnerFunction) -> WrappedFunction:
-        return functools.partial(wrapper_function, inner_function)
+        return functools.partial(wrapper_function, inner_function,
+                                 *args, **kwargs)
     return wrap_decorator
 
-def wrap_method(wrapper_function: Callable[[Callable[[*TArgs2], T2], *TArgs], T])\
-        -> Callable[[InnerFunction], WrappedFunction]:
+
+def wrap_method(
+        wrapper_function: Callable[[InnerFunction, *TArgs2], T2],
+        *args,
+        **kwargs) -> Callable[[InnerFunction], WrappedFunction]:
     def wrap_decorator(inner_function: InnerFunction) -> WrappedFunction:
-        return functools.partialmethod(wrapper_function, inner_function)
+        return functools.partialmethod(wrapper_function, inner_function,
+                                       *args, **kwargs)
     return wrap_decorator
 
 # def extend(

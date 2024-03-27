@@ -32,17 +32,6 @@ class represented_by:
         return func
 
 
-# def represented_by(
-#         func: Callable[['MatchStream'], bool],
-#         symbol: str,
-#         *, escaped: bool = False):
-#     if escaped:
-#         _parser_symbols_escaped[symbol] = func
-#     else:
-#         _parser_symbols[symbol] = func
-#     return func
-
-
 class MatchConditions:
     _alpha = {chr(i) for i in range(ord('a'), ord('z') + 1)}\
         | {chr(i) for i in range(ord('A'), ord('Z') + 1)}
@@ -124,19 +113,6 @@ class MatchConditions:
 MatchPredicate: TypeAlias = Callable[[MatchConditions], bool]
 
 CaptureGroup: TypeAlias = int | str
-# class CaptureGroup:
-#     _groups = {}
-#     id: int | str
-
-#     @staticmethod
-#     def group_for(id: int | str):
-#         if id in CaptureGroup._groups:
-#             return CaptureGroup._groups[id]
-#         else:
-#             new_group = CaptureGroup(id)
-#             CaptureGroup._groups[id] = new_group
-#             return new_group
-
 
 class State:
     _replaced_with: 'State | None' = None
@@ -147,46 +123,50 @@ class State:
         self.next = set()
         self.previous = set()
 
-    def connect(self, edge: 'Edge'):
-        self.next.add(edge)
-        if edge.previous:
-            edge.previous.disconnect(edge)
-        edge.previous = self
-
-    def disconnect(self, edge: 'Edge'):
-        self.next.discard(edge)
-        edge.previous = None
-
-    def rconnect(self, edge: 'Edge'):
+    def _connect_previous(self, edge: 'Edge'):
         self.previous.add(edge)
-        if edge.next:
-            edge.next.rdisconnect(edge)
-        edge.next = self
 
-    def rdisconnect(self, edge: 'Edge'):
+    def _connect_next(self, edge: 'Edge'):
+        self.next.add(edge)
+
+    def _disconnect_previous(self, edge: 'Edge'):
         self.previous.discard(edge)
-        edge.next = None
+
+    def _disconnect_next(self, edge: 'Edge'):
+        self.next.discard(edge)
 
     def merge(self, other: 'State'):
-        # TODO: remove duplicates
         for edge in other.previous.copy():
-            self.rconnect(edge)
+            if edge.previous == self and edge.is_free():
+                edge.remove()
+                continue
+            new_edge = edge.clone_shallow()
+            new_edge.rconnect(edge.previous)
+            new_edge.connect(self)
+            edge.remove()
         for edge in other.next.copy():
-            self.connect(edge)
+            new_edge = edge.clone_shallow()
+            new_edge.connect(edge.next)
+            new_edge.rconnect(self)
+            edge.remove()
         other._replaced_with = self
 
     def clone_shallow(self, *, reverse: bool = True) -> 'State':
         new = State()
-        for edge in self.next:
+        for edge in self.next.copy():
             new_edge = edge.clone_shallow()
-            if new_edge.next == self:
+            if edge.next == self:
                 new_edge.connect(new)
+            else:
+                new_edge.connect(edge.next)
             new_edge.rconnect(new)
         if reverse:
-            for edge in self.previous:
+            for edge in self.previous.copy():
                 new_edge = edge.clone_shallow()
-                if new_edge.previous == self:
+                if edge.previous == self:
                     new_edge.rconnect(new)
+                else:
+                    new_edge.rconnect(edge.previous)
                 new_edge.connect(new)
         return new
 
@@ -262,35 +242,42 @@ class Edge:
             result += f", ({self.opens};{self.closes})"
         return result
 
-    def connect(self, state: State):
-        state.rconnect(self)
+    def unsafe_connect(self, state: State):
+        self.next = state
+        if self.previous is not None:
+            state._connect_previous(self)
+            self.previous._connect_next(self)
 
-    def disconnect(self):
-        self.next.rdisconnect(self)
+    def connect(self, state: State):
+        if self.next is not None:
+            raise RuntimeError("handle better")
+        self.unsafe_connect(state)
+
+    def unsafe_rconnect(self, state: State):
+        self.previous = state
+        if self.next is not None:
+            state._connect_next(self)
+            self.next._connect_previous(self)
 
     def rconnect(self, state: State):
-        state.connect(self)
-
-    def rdisconnect(self):
-        self.previous.disconnect(self)
+        if self.previous is not None:
+            raise RuntimeError("handle better")
+        self.unsafe_rconnect(state)
 
     def remove(self):
-        if self.previous is None:
-            print(f"WARN: {self.previous=}")
-        else:
-            self.previous.disconnect(self)
-        if self.next is None:
-            print(f"WARN: {self.next=}")
-        else:
-            self.next.rdisconnect(self)
+        self.previous._disconnect_next(self)
+        self.next._disconnect_previous(self)
+        self.next = self.previous = None
+
+    def is_free(self) -> bool:
+        return (self.predicate == MatchConditions.epsilon_transition
+                and not (self.opens or self.closes))
 
     def clone_shallow(self) -> 'Edge':
         new = Edge()
         new.predicate = self.predicate
         new.closes = self.closes
         new.opens = self.opens
-        new.connect(self.next)
-        new.rconnect(self.previous)
         return new
 
     def clone(
@@ -319,9 +306,24 @@ class Edge:
             return True
         return False
 
-    def approx_equals(self, other: 'Edge') -> bool:
-        return (self.next == other.next
+    def __equals__(self, other: 'Edge') -> bool:
+        return (self.value_hash() == other.value_hash()
+                and self.next == other.next
                 and self.previous == other.previous
                 and self.opens == other.opens
                 and self.closes == other.closes
                 and self.predicates_match(other))
+
+    @staticmethod
+    def _hash_set(value: set) -> int:
+        result = 0
+        for element in value:
+            result ^= hash(element)
+        return result
+
+    def __hash__(self) -> int:
+        return (hash(self.next)
+                ^ (hash(self.previous) >> 1)
+                ^ Edge._hash_set(self.opens)
+                ^ (Edge._hash_set(self.closes) >> 1)
+                ^ hash(self.predicate))

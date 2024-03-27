@@ -1,3 +1,4 @@
+from enum import IntFlag, auto
 import functools
 from typing import Callable
 
@@ -22,11 +23,17 @@ class Regex:
     def end(self):
         return self._end
 
+    class RecursionType(IntFlag):
+        FORWARD = auto()
+        REVERSE = auto()
+        BOTH = FORWARD | REVERSE
+
     def walk_graph(
             self,
             visitor: Callable[[Edge], State | None],
             *args, _start: State | None = None,
             _visited: set[State] | None = None,
+            _side: RecursionType = RecursionType.FORWARD,
             **kwargs) -> Callable[['Regex'], None]:
         if _start is None:
             _start = self._start
@@ -44,9 +51,10 @@ class Regex:
                 self._end = self._end._replaced_with
             if edge.next is None or edge.previous is None:
                 continue
-            visitor(
-                edge, *args, **kwargs,
-                _start=self._start, _end=self._end)
+            if _side & Regex.RecursionType.FORWARD:
+                visitor(
+                    edge, *args, **kwargs,
+                    _start=self._start, _end=self._end)
             if edge.next is not None:
                 self.walk_graph(visitor, *args,
                                 **kwargs,
@@ -58,7 +66,10 @@ class Regex:
                                 _start=_start,
                                 _visited=_visited)
                 return
-            #     visitor(edge, *args)  # Walk back up graph too
+            if _side & Regex.RecursionType.REVERSE:
+                visitor(
+                    edge, *args, **kwargs,
+                    _start=self._start, _end=self._end)
         while self._start._replaced_with is not None:
             self._start = self._start._replaced_with
         while self._end._replaced_with is not None:
@@ -70,14 +81,7 @@ class Regex:
             _start: State,
             _end: State,
             debug=lambda _: None):
-        # if edge.previous is not None:
-        for other in edge.previous.next.copy():
-            # Remove duplicates
-            if other != edge and other.approx_equals(edge):
-                other.remove()
-        # self-epsilon-loops
-        if (edge.predicate == MatchConditions.epsilon_transition
-                and edge.previous == edge.next):
+        if (edge.is_free() and edge.previous == edge.next):
             next_state = edge.previous
             edge.remove()
             debug(_start, _end, f"remove self-loop from {next_state}")
@@ -93,25 +97,28 @@ class Regex:
                     path.closes |= edge.closes
                 edge.closes = set()
         # merge states connected by e-moves
-        if (edge.predicate == MatchConditions.epsilon_transition
+        if (edge.is_free()
             and (len(edge.previous.next) == 1
-                 or len(edge.next.previous) == 1)
-                and not (edge.opens or edge.closes)):
+                 or len(edge.next.previous) == 1)):
             debug_str = f"{edge}: merge {edge.next} with {edge.previous}"
             edge.next.merge(edge.previous)
-            edge.remove()
             debug(_start, _end, debug_str)
             return
 
-    @wrap_method(walk_graph)
+    @wrap_method(walk_graph, _side=RecursionType.REVERSE)
     def extended_epsilon_closure(
             edge: Edge,
             _start: State,
             _end: State,
             debug=lambda _: None):
+        if (edge.is_free() and edge.previous == edge.next):
+            next_state = edge.previous
+            edge.remove()
+            debug(_start, _end, f"remove self-loop from {next_state}")
+            return
         # strategy for removing enclosed e-moves: split their end-state
         # into 2 - one for the e-move, one for the other connections
-        if (edge.predicate == MatchConditions.epsilon_transition
+        if (edge.is_free()
                 and len(edge.previous.next) > 1
                 and len(edge.next.previous) > 1
                 and edge.next != _end):
@@ -268,6 +275,8 @@ class RegexBuilder:
             self._end.rconnect(e_move)
         result = Regex(self._start, self._end)
         if not _nested:
+            # pass
+            result.epsilon_closure(debug=debug)
             result.epsilon_closure(debug=debug)
             result.extended_epsilon_closure(debug=debug)
             result.extended_epsilon_closure(debug=debug)
@@ -275,32 +284,25 @@ class RegexBuilder:
         return result
 
     def _append_edge(self, edge: Edge):
-        self._end.connect(edge)
+        edge.rconnect(self._end)
         self._last_token = self._end
         self._end = State()
-        self._end.rconnect(edge)
+        edge.connect(self._end)
 
     def _append_regex(self, rx: Regex, group_id: CaptureGroup | None):
-        # e-move for sandboxing
-        sbx_edge = Edge()
+        # e-moves for sandboxing
+        start_edge = Edge()
         if group_id is not None:
-            sbx_edge.opens.add(group_id)
-        self._append_edge(sbx_edge)
-        # Embed entire rx inside this
-        for edge in rx._start.next.copy():
-            # Steal edge from rx
-            self._end.connect(edge)
-        for edge in rx._start.previous.copy():
-            # Steal edge from rx
-            self._end.rconnect(edge)
-            # pass
+            start_edge.opens.add(group_id)
+        end_edge = Edge()
+        if group_id is not None:
+            end_edge.closes.add(group_id)
+
+        start_edge.rconnect(self._end)
+        start_edge.connect(rx.begin())
+        end_edge.rconnect(rx.end())
         self._end = State()
-        # e-move for sandboxing
-        sbx_edge = Edge()
-        if group_id is not None:
-            sbx_edge.closes.add(group_id)
-        rx.end().connect(sbx_edge)
-        self._end.rconnect(sbx_edge)
+        end_edge.connect(self._end)
 
     def _parse_char(self,
                     char: str,
@@ -318,13 +320,13 @@ class RegexBuilder:
             case ch, False if ch in _parser_symbols:
                 self._append_edge(Edge(_parser_symbols[ch]))
             case '?', False:  # Make _last_token optional
-                new = Edge()
-                self._last_token.connect(new)
-                self._end.rconnect(new)
+                edge = Edge()
+                edge.rconnect(self._last_token)
+                edge.connect(self._end)
             case '+', False:  # Repeat 1+ times quantifier
-                new = Edge()
-                self._last_token.rconnect(new)
-                self._end.connect(new)
+                edge = Edge()
+                edge.connect(self._last_token)
+                edge.rconnect(self._end)
                 # sandbox to prevend out-of-order-ing sequenced loops
                 self._append_edge(Edge())
             case '*', False:  # Repeat 0+ times quantifier

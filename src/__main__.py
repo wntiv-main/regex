@@ -21,7 +21,7 @@ def main():
     # try:
     rx = RegexBuilder(r"(?:a?b?c?)*l").build(
         debug=debug)
-    mfv.add(DebugGraphViewer(rx.begin(), rx.begin()).render())
+    mfv.add(DebugGraphViewer(rx.begin(), rx.end()).render())
     # finally:
     mfv.display()
     # test_layouts_for(rx.begin(), rx.end())
