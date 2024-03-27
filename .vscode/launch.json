@@ -6,7 +6,7 @@
 	"configurations": [
 		{
 			"name": "Python: Run Main",
-			"type": "debugpy",
+			"type": "python",
 			"request": "launch",
 			"program": "${workspaceFolder}/src/__main__.py",
 			"justMyCode": false,
@@ -14,7 +14,7 @@
 		},
 		{
 			"name": "Python: Run DebugGraphViewer",
-			"type": "debugpy",
+			"type": "python",
 			"request": "launch",
 			"program": "${workspaceFolder}/src/debug_graph_viewer.py",
 			"console": "integratedTerminal"

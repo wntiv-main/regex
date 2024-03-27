@@ -81,14 +81,17 @@ class Regex:
             next_state = edge.previous
             edge.remove()
             debug(_start, _end, f"remove self-loop from {next_state}")
+            return
         # transfer capture groups to non-epsilon transitions
         if edge.predicate == MatchConditions.epsilon_transition:
             if edge.opens and len(edge.next.previous) == 1:
                 for path in edge.next.next:
                     path.opens |= edge.opens
+                edge.opens = set()
             if edge.closes and len(edge.previous.next) == 1:
                 for path in edge.previous.previous:
                     path.closes |= edge.closes
+                edge.closes = set()
         # merge states connected by e-moves
         if (edge.predicate == MatchConditions.epsilon_transition
             and (len(edge.previous.next) == 1
@@ -98,6 +101,7 @@ class Regex:
             edge.next.merge(edge.previous)
             edge.remove()
             debug(_start, _end, debug_str)
+            return
 
     @wrap_method(walk_graph)
     def extended_epsilon_closure(
@@ -265,6 +269,7 @@ class RegexBuilder:
         result = Regex(self._start, self._end)
         if not _nested:
             result.epsilon_closure(debug=debug)
+            result.extended_epsilon_closure(debug=debug)
             result.extended_epsilon_closure(debug=debug)
             result.epsilon_closure(debug=debug)
         return result
