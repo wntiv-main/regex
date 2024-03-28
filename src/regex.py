@@ -120,15 +120,14 @@ class Regex:
         # into 2 - one for the e-move, one for the other connections
         if (edge.is_free()
                 and len(edge.previous.next) > 1
-                and len(edge.next.previous) > 1
-                and edge.next != _end):
+                and len(edge.next.previous) > 1):
             debug(_start, _end, f"{edge}: spliting {edge.next}")
             new_state = edge.next.clone_shallow(reverse=False)
             edge.previous.merge(new_state)
-            # if edge.next == _end:
-            #     new_edge = Edge()
-            #     new_state.connect(new_edge)
-            #     new_edge.connect(_end)
+            if edge.next == _end:
+                new_edge = Edge()
+                new_edge.rconnect(new_state)
+                new_edge.connect(_end)
             edge.remove()
             debug(_start, _end, f"{edge}: split {edge.next} to {new_state}")
 
@@ -278,7 +277,19 @@ class RegexBuilder:
             # pass
             result.epsilon_closure(debug=debug)
             result.epsilon_closure(debug=debug)
+            result.epsilon_closure(debug=debug)
             result.extended_epsilon_closure(debug=debug)
+            result.epsilon_closure(debug=debug)
+            result.epsilon_closure(debug=debug)
+            result.extended_epsilon_closure(debug=debug)
+            result.epsilon_closure(debug=debug)
+            result.epsilon_closure(debug=debug)
+            result.extended_epsilon_closure(debug=debug)
+            result.epsilon_closure(debug=debug)
+            result.epsilon_closure(debug=debug)
+            result.extended_epsilon_closure(debug=debug)
+            result.epsilon_closure(debug=debug)
+            result.epsilon_closure(debug=debug)
             result.extended_epsilon_closure(debug=debug)
             result.epsilon_closure(debug=debug)
         return result

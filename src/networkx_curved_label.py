@@ -98,6 +98,8 @@ def draw_networkx_edge_labels(
     """
     import matplotlib.pyplot as plt
     import numpy as np
+    
+    _visited_loop_states: dict[int] = {}
 
     if edgelist is None:
         edgelist = list(G.edges())
@@ -120,7 +122,13 @@ def draw_networkx_edge_labels(
         pos_2 = ax.transData.transform(np.array(pos[n2]))
         linear_mid = 0.5*pos_1 + 0.5*pos_2
         v_shift = 0
-        if np.all(pos_1 == pos_2):
+        if n1 == n2:
+            dup_number: int = 0
+            if n1 in _visited_loop_states:
+                dup_number = _visited_loop_states[n1]
+                _visited_loop_states[n1] += 1
+            else:
+                _visited_loop_states[n1] = 1
             # Self-loop:
             # Code from networkx.draw_networkx_edges    
             edge_pos = np.asarray([(pos[e[0]], pos[e[1]]) for e in edgelist])
@@ -129,7 +137,7 @@ def draw_networkx_edge_labels(
             h = maxy - miny
             
             selfloop_ht = 0.005 * node_size if h == 0 else h
-            v_shift = 10 * selfloop_ht
+            v_shift = 10 * selfloop_ht + font_size * dup_number
         d_pos = pos_2 - pos_1
         rotation_matrix = np.array([(0, 1), (-1, 0)])
         ctrl_1 = linear_mid + rad*rotation_matrix@d_pos

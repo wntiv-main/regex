@@ -19,7 +19,7 @@ def main():
         fig.canvas.manager.set_window_title(lbl)
         mfv.add(fig)
     # try:
-    rx = RegexBuilder(r"(?:a?b?c?)*l").build(
+    rx = RegexBuilder(r"(?:a?b?c?)*").build(
         debug=debug)
     mfv.add(DebugGraphViewer(rx.begin(), rx.end()).render())
     # finally:

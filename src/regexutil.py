@@ -306,8 +306,10 @@ class Edge:
             return True
         return False
 
-    def __equals__(self, other: 'Edge') -> bool:
-        return (self.value_hash() == other.value_hash()
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, Edge): return NotImplemented
+        return id(self) == id(other) or (
+                hash(self) == hash(other)
                 and self.next == other.next
                 and self.previous == other.previous
                 and self.opens == other.opens
@@ -322,8 +324,9 @@ class Edge:
         return result
 
     def __hash__(self) -> int:
-        return (hash(self.next)
-                ^ (hash(self.previous) >> 1)
-                ^ Edge._hash_set(self.opens)
-                ^ (Edge._hash_set(self.closes) >> 1)
-                ^ hash(self.predicate))
+        return hash((
+            self.next,
+            self.previous,
+            Edge._hash_set(self.opens),
+            Edge._hash_set(self.closes),
+            self.predicate))
