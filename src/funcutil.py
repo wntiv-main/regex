@@ -1,5 +1,5 @@
 import functools
-from typing import Any, Callable, TypeAlias, TypeVar, TypeVarTuple, Unpack
+from typing import Any, Callable, Generic, Self, TypeAlias, TypeVar, TypeVarTuple
 
 
 T = TypeVar("T")
@@ -61,3 +61,69 @@ def negate(func: Callable[[*TArgs], bool]) -> Callable[[*TArgs], bool]:
     def wrapper(*args, **kwargs):
         return not func(*args, **kwargs)
     return wrapper
+
+
+class Mutable:
+    _instance: 'Mutable' = None
+    __slots__ = ()
+
+    def __new__(cls) -> Self:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+
+class _UnsafeMutable(type):
+    @staticmethod
+    def _property(name: str) -> property:
+        @property
+        def prop(self):
+            return getattr(self, name)
+
+        @prop.setter
+        def prop(self, value):
+            if self._UnsafeMutable__currently_mutable:
+                setattr(self, name, value)
+            else:
+                raise RuntimeError(
+                    f"{self.__class__.__name__} mutated unsafely: "
+                    f"tried to modify {name}")
+        return prop
+
+    def __new__(cls, clsname: str, bases: tuple[type], attrs: dict):
+        for name, value in attrs.copy().items():
+            if not name.startswith('_') or value is not Mutable():
+                continue
+
+            attrs[name[1:]] = _UnsafeMutable._property(name)
+
+        return super().__new__(cls, clsname, bases, attrs)
+
+
+class UnsafeMutable(metaclass=_UnsafeMutable):
+    __currently_mutable: bool
+
+    def __init__(self) -> None:
+        self.__currently_mutable = False
+
+    @staticmethod
+    def mutator(func: Callable[['UnsafeMutable', *TArgs], T]) \
+            -> Callable[['UnsafeMutable', *TArgs], T]:
+        def wrapper(self: UnsafeMutable, *args: *TArgs, **kwargs) -> T:
+            if self.__currently_mutable:
+                return func(self, *args, **kwargs)
+            else:
+                raise RuntimeError(
+                    f"{self.__class__.__name__} mutated unsafely: "
+                    f"tried to use mutator {func.__name__}")
+        return wrapper
+
+    def __enter__(self) -> Self:
+        if self.__currently_mutable:
+            raise RuntimeError(f"{self} is already being mutated")
+        self.__currently_mutable = True
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> bool:
+        self.__currently_mutable = False
+        return False
