@@ -1,5 +1,5 @@
 import functools
-from typing import Any, Callable, Generic, Self, TypeAlias, TypeVar, TypeVarTuple
+from typing import Any, Callable, Self, TypeAlias, TypeVar, TypeVarTuple
 
 
 T = TypeVar("T")

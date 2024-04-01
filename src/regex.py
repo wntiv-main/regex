@@ -142,16 +142,39 @@ class Regex:
             edge.previous.merge(new_state)
             if edge.next == _end:
                 with Edge() as new_edge:
-                    new_edge.previous = new_state
+                    new_edge.previous = edge.previous
                     new_edge.next = _end
             with edge:
                 edge.remove()
             debug(_start, _end, f"{edge}: split {edge.next} to {new_state}")
 
-    @wrap_method(walk_graph)
-    def minify(edge: Edge, debug=lambda _: None):
-        # TODO: minification
-        pass
+    def minify(self):
+        states: set[State] = set()
+        to_explore: list[State] = [self._start]
+        while to_explore:
+            exploring = to_explore.pop()
+            if exploring in states:
+                continue
+            states.add(exploring)
+            for edge in exploring.next:
+                if edge.next == exploring:
+                    continue
+                to_explore.append(edge.next)
+        states_list = list(states)
+        for i in range(len(states_list) - 1):  # exclude last
+            first = states_list[i]
+            # only iterate forward states
+            for second in states_list[i + 1:]:
+                diff = first.output_diff(second)
+                for edge in diff:
+                    # TODO: this is wrong. fix
+                    if not edge.is_free() or (edge.next != first
+                                              and edge.next != second):
+                        break
+                else:
+                    first.merge(second)
+
+
 
 class RegexBuilder:
     class PatternParseError(Exception):
@@ -302,6 +325,10 @@ class RegexBuilder:
             result.extended_epsilon_closure(debug=debug)
             result.extended_epsilon_closure(debug=debug)
             result.extended_epsilon_closure(debug=debug)
+            result.epsilon_closure(debug=debug)
+            result.epsilon_closure(debug=debug)
+            result.epsilon_closure(debug=debug)
+            result.minify()
             result.epsilon_closure(debug=debug)
             result.epsilon_closure(debug=debug)
             result.epsilon_closure(debug=debug)

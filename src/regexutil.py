@@ -124,9 +124,13 @@ class State:
         self.previous = set()
 
     def _connect_previous(self, edge: 'Edge'):
+        if self._replaced_with is not None:
+            raise RuntimeError()
         self.previous.add(edge)
 
     def _connect_next(self, edge: 'Edge'):
+        if self._replaced_with is not None:
+            raise RuntimeError()
         self.next.add(edge)
 
     def _disconnect_previous(self, edge: 'Edge'):
@@ -185,6 +189,16 @@ class State:
             new.previous.add(path.clone(map_state, map_path))
         map_state[self] = new
         return new
+
+    def output_diff(self, other: 'State'):
+        result = self.next.copy()
+        for edge in other.next:
+            mod_edge = edge.clone_shallow()
+            # This is unsafe make sure this edge never gets used
+            mod_edge._next = edge.next
+            mod_edge._previous = self
+            result ^= set((mod_edge,))
+        return result
 
 
 class Edge(UnsafeMutable):
