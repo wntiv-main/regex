@@ -3,7 +3,7 @@ import functools
 from typing import Callable
 
 from funcutil import extend, negate, wrap, wrap_method
-from regexutil import CaptureGroup, State, Edge, MatchConditions, \
+from regexutil import CaptureGroup, ConsumeAny, ConsumeString, State, Edge, MatchConditions, \
     _parser_symbols, _parser_symbols_escaped
 
 
@@ -45,10 +45,6 @@ class Regex:
             return
         _visited.add(_start)
         for edge in _start.next.copy():
-            while self._start._replaced_with is not None:
-                self._start = self._start._replaced_with
-            while self._end._replaced_with is not None:
-                self._end = self._end._replaced_with
             if edge.next is None or edge.previous is None:
                 continue
             if _side & Regex.RecursionType.FORWARD:
@@ -61,6 +57,7 @@ class Regex:
                                 _start=edge.next,
                                 _visited=_visited)
             else:
+                _visited.discard(_start)
                 self.walk_graph(visitor, *args,
                                 **kwargs,
                                 _start=_start,
@@ -70,10 +67,6 @@ class Regex:
                 visitor(
                     edge, *args, **kwargs,
                     _start=self._start, _end=self._end)
-        while self._start._replaced_with is not None:
-            self._start = self._start._replaced_with
-        while self._end._replaced_with is not None:
-            self._end = self._end._replaced_with
 
     @wrap_method(walk_graph)
     def epsilon_closure(
@@ -88,7 +81,7 @@ class Regex:
             debug(_start, _end, f"remove self-loop from {next_state}")
             return
         # transfer capture groups to non-epsilon transitions
-        if (edge._predicate == MatchConditions.epsilon_transition
+        if (edge.predicate == MatchConditions.epsilon_transition
                 and (edge.has_opens() or edge.has_closes())):
             with edge:
                 if edge.has_opens() and edge.next.inputs() == 1:
@@ -147,6 +140,36 @@ class Regex:
             with edge:
                 edge.remove()
             debug(_start, _end, f"{edge}: split {edge.next} to {new_state}")
+
+    @wrap_method(walk_graph)
+    def powerset_construction(
+            edge: Edge,
+            _start: State,
+            _end: State):
+        for other in edge.previous.next.copy():
+            if edge.next == other.next:
+                continue
+            match edge.predicate_intersection(other):
+                case None: continue
+                case left, intersect, right:
+                    # We need to construct a "superposition" state
+                    start_state = edge.previous
+                    new_state = edge.next.clone_shallow(reverse=False)
+                    new_state.merge(other.next.clone_shallow(reverse=False))
+                    with edge:
+                        if left is not None:
+                            edge.predicate = left
+                        else:
+                            edge.remove(chain=True)
+                    with other:
+                        if right is not None:
+                            other.predicate = right
+                        else:
+                            other.remove(chain=True)
+                    with Edge(intersect) as intersect_edge:
+                        intersect_edge.previous = start_state
+                        intersect_edge.next = new_state
+
 
     def minify(self):
         states: set[State] = set()
@@ -309,9 +332,9 @@ class RegexBuilder:
                 break
         for end in self._untied_ends:
             # connect to real end
-            e_move = Edge()
-            end.connect(e_move)
-            self._end.rconnect(e_move)
+            with Edge() as e_move:
+                e_move.previous = end
+                e_move.next = self._end
         result = Regex(self._start, self._end)
         if not _nested:
             # pass
@@ -332,6 +355,7 @@ class RegexBuilder:
             result.epsilon_closure(debug=debug)
             result.epsilon_closure(debug=debug)
             result.epsilon_closure(debug=debug)
+            result.powerset_construction()
         return result
 
     def _append_edge(self, edge: Edge):
@@ -397,8 +421,7 @@ class RegexBuilder:
                 cls_specifier = self._consume_till_next(
                     ']', self._is_unescaped)
                 chars = self._chars_from_char_class(cls_specifier)
-                self._append_edge(Edge(functools.partial(
-                    MatchConditions.try_consume, match_set=chars)))
+                self._append_edge(Edge(ConsumeAny(chars)))
             case '{', False:  # n-quantifier
                 quantity = self._consume_till_next('}', self._is_unescaped)
                 # TODO: handle ;)
@@ -447,8 +470,7 @@ class RegexBuilder:
                 self._end = self._start
             # All other chars:
             case (ch, _) if not self._escaped or ch in self._special_chars:
-                self._append_edge(Edge(functools.partial(
-                    MatchConditions.try_consume, match_char=ch)))
+                self._append_edge(Edge(ConsumeString(ch)))
             case _:
                 bk = '\\'  # dumb python
                 raise RegexBuilder.PatternParseError(

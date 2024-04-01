@@ -62,9 +62,15 @@ def negate(func: Callable[[*TArgs], bool]) -> Callable[[*TArgs], bool]:
         return not func(*args, **kwargs)
     return wrapper
 
+def _hash_set(value: set) -> int:
+    result = 0
+    for element in value:
+        result ^= hash(element)
+    return result
 
-class Mutable:
-    _instance: 'Mutable' = None
+
+class _MutableType:
+    _instance: '_MutableType' = None
     __slots__ = ()
 
     def __new__(cls) -> Self:
@@ -72,6 +78,8 @@ class Mutable:
             cls._instance = super().__new__(cls)
         return cls._instance
 
+
+Mutable = _MutableType()
 
 class _UnsafeMutable(type):
     @staticmethod
@@ -92,7 +100,7 @@ class _UnsafeMutable(type):
 
     def __new__(cls, clsname: str, bases: tuple[type], attrs: dict):
         for name, value in attrs.copy().items():
-            if not name.startswith('_') or value is not Mutable():
+            if not name.startswith('_') or value is not Mutable:
                 continue
 
             attrs[name[1:]] = _UnsafeMutable._property(name)
