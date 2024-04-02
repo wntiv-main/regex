@@ -540,12 +540,17 @@ class Edge(UnsafeMutable):
         while len(self._closes):
             yield self._closes.pop()
 
-    def remove(self, *, chain: bool = False):
-        if chain and self.next.inputs() < 1:
+    def remove(self) -> None:
+        self.next = self.previous = None
+
+    def remove_chain(self) -> set[State]:
+        result = set()
+        if self.next.inputs() < 1:
             while len(self.next.next):
                 with self.next.next.pop() as edge:
-                    edge.remove(chain=True)
-        self.next = self.previous = None
+                    result |= edge.remove_chain()
+        self.remove()
+        return result
 
     def is_free(self) -> bool:
         return (self.predicate == MatchConditions.epsilon_transition

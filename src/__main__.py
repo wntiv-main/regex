@@ -28,6 +28,7 @@ def main():
         mfv.add(DebugGraphViewer(rx.begin(), rx.end()).render())
     except Exception as e:
         print(e)
+        raise e
     finally:
         mfv.display()
     # test_layouts_for(rx.begin(), rx.end())

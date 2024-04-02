@@ -1,15 +1,53 @@
 from enum import IntFlag, auto
 import functools
-from typing import Any, Callable
+from typing import Any, Callable, Generic, Self, TypeVarTuple
 
 from funcutil import extend, negate, wrap, wrap_method
 from regexutil import CaptureGroup, ConsumeAny, ConsumeString, SignedSet, State, Edge, MatchConditions, \
     _parser_symbols, _parser_symbols_escaped
 
 
+TArgs = TypeVarTuple("TArgs")
 class Regex:
     _start: State
     _end: State
+    _states: set[State] | None = None
+
+    @property
+    def start(self) -> State:
+        while self._start._replaced_with is not None:
+            self._start = self._start._replaced_with
+        return self._start
+
+    @start.setter
+    def start(self, value: State) -> None:
+        self._start = value
+
+    @property
+    def end(self) -> State:
+        while self._end._replaced_with is not None:
+            self._end = self._end._replaced_with
+        return self._end
+
+    @end.setter
+    def end(self, value: State) -> None:
+        self._end = value
+
+    def states(self):
+        if self._states is None:
+            self._states = set()
+            to_explore: list[State] = [self._start]
+            while to_explore:
+                exploring = to_explore.pop()
+                if exploring in self._states:
+                    continue
+                self._states.add(exploring)
+                for edge in exploring.next:
+                    if edge.next == exploring:
+                        continue
+                    to_explore.append(edge.next)
+        return self._states
+
     # _flags: RegexFlags
     # _capture_groups: set[CaptureGroup]
 
@@ -17,16 +55,175 @@ class Regex:
         self._start = start
         self._end = end
 
-    def begin(self):
-        return self._start
-
-    def end(self):
-        return self._end
-
     class RecursionType(IntFlag):
         FORWARD = auto()
         REVERSE = auto()
         BOTH = FORWARD | REVERSE
+
+    class GraphWalk(Generic[*TArgs]):
+        _regex: 'Regex'
+        _to_explore: list[State]
+        _current_state: State
+
+        def __init__(self,
+                     visitor: Callable[[Edge, Self, *TArgs], bool],
+                     regex: 'Regex',
+                     *args: *TArgs,
+                     **kwargs):
+            self._regex = regex
+            self._to_explore = list(regex.states())
+            while self._to_explore:
+                self._current_state = self._to_explore.pop()
+                for edge in self._current_state.next.copy():
+                    if visitor(edge, self, *args, **kwargs):
+                        break
+
+        def add_state(self, state) -> None:
+            self._regex._states.add(state)
+            if state not in self._to_explore:
+                self._to_explore.append(state)
+        update_state = add_state
+
+        def retry_state(self) -> None:
+            if self._current_state not in self._to_explore:
+                self._to_explore.append(self._current_state)
+
+        def remove_state(self, state: State) -> None:
+            self._regex._states.remove(state)
+            while state in self._to_explore:
+                self._to_explore.remove(state)
+
+        def begin(self) -> State:
+            return self._regex.start
+
+        def end(self) -> State:
+            return self._regex.end
+
+        @classmethod
+        def er(cls, visitor: Callable[[Edge, Self, *TArgs], bool]) \
+                -> Callable[['Regex', *TArgs], Self]:
+            def result(self: 'Regex', *args: *TArgs, **kwargs):
+                return cls(visitor, self, *args, **kwargs)
+            return result
+
+    @GraphWalk.er
+    def epsilon_closure_v2(
+            edge: Edge,
+            walker: GraphWalk,
+            debug) -> None:
+        if (edge.is_free() and edge.previous == edge.next):
+            next_state = edge.previous
+            with edge:
+                edge.remove()
+            debug(walker.begin(), walker.end(),
+                  f"remove self-loop from {next_state}")
+            walker.retry_state()
+            return True  # edge deleted
+        # transfer capture groups to non-epsilon transitions
+        if (edge.predicate == MatchConditions.epsilon_transition
+                and (edge.has_opens() or edge.has_closes())):
+            with edge:
+                if edge.has_opens() and edge.next.inputs() == 1:
+                    try:  # spoof with statement dont question it
+                        for path in edge.next.next:
+                            path.__enter__()
+                        for group in edge.move_opens():
+                            for path in edge.next.next:
+                                path.open(group)
+                    finally:
+                        for path in edge.next.next:
+                            path.__exit__(*(None,)*3)
+                if edge.has_closes() and edge.previous.outputs() == 1:
+                    try:  # spoof with statement dont question it
+                        for path in edge.previous.previous:
+                            path.__enter__()
+                        for group in edge.move_closes():
+                            for path in edge.previous.previous:
+                                path.close(group)
+                    finally:
+                        for path in edge.previous.previous:
+                            # cursed dont question it
+                            path.__exit__(*(None,)*3)
+        # merge states connected by e-moves
+        if (edge.is_free()
+            and (edge.previous.outputs() == 1
+                 or edge.next.inputs() == 1)):
+            debug_str = f"{edge}: merge {edge.next} with {edge.previous}"
+            edge.next.merge(edge.previous)
+            walker.remove_state(edge.previous)
+            walker.update_state(edge.next)
+            debug(walker.begin(), walker.end(), debug_str)
+            return True
+
+    @GraphWalk.er
+    def extended_epsilon_closure_v2(
+            edge: Edge,
+            walker: GraphWalk,
+            debug) -> None:
+        if (edge.is_free() and edge.previous == edge.next):
+            next_state = edge.previous
+            with edge:
+                edge.remove()
+            debug(walker.begin(), walker.end(),
+                  f"remove self-loop from {next_state}")
+            walker.retry_state()
+            return True  # Edge removed
+        # strategy for removing enclosed e-moves: split their end-state
+        # into 2 - one for the e-move, one for the other connections
+        if (edge.is_free()
+                and edge.previous.outputs() > 1
+                and edge.next.inputs() > 1):
+            new_state = edge.next.clone_shallow(reverse=False)
+            edge.previous.merge(new_state)
+            if edge.next == walker.end():
+                with Edge() as new_edge:
+                    new_edge.previous = edge.previous
+                    new_edge.next = walker.end()
+            with edge:
+                edge.remove()
+            debug(walker.begin(), walker.end(),
+                  f"{edge}: split {edge.next} to {new_state}")
+            walker.retry_state()
+            return True  # new edges on state, edge removed
+
+    @GraphWalk.er
+    def powerset_construction_v2(
+            edge: Edge,
+            walker: GraphWalk,
+            debug) -> None:
+        for other in edge.previous.next.copy():
+            if edge.next == other.next:
+                continue
+            match edge.predicate_intersection(other):
+                case None: continue
+                case left, intersect, right:
+                    # We need to construct a "superposition" state
+                    start_state = edge.previous
+                    debug(walker.begin(), walker.end(),
+                          f"intersect {edge}, {other} at {start_state}")
+                    new_state = edge.next.clone_shallow(reverse=False)
+                    new_state.merge(other.next.clone_shallow(reverse=False))
+                    walker.add_state(new_state)
+                    with other:
+                        if right is not None:
+                            other.predicate = right
+                        else:
+                            for state in other.remove_chain():
+                                walker.remove_state(state)
+                    with Edge(intersect) as intersect_edge:
+                        intersect_edge.previous = start_state
+                        intersect_edge.next = new_state
+                    with edge:
+                        if left is not None:
+                            edge.predicate = left
+                        else:
+                            for state in edge.remove_chain():
+                                walker.remove_state(state)
+                            walker.retry_state()
+                            return True
+        return True
+
+
 
     def walk_graph(
             self,
@@ -367,24 +564,14 @@ class RegexBuilder:
         result = Regex(self._start, self._end)
         if not _nested:
             # pass
-            result.epsilon_closure(debug=debug)
-            result.epsilon_closure(debug=debug)
-            result.extended_epsilon_closure(debug=debug)
-            result.extended_epsilon_closure(debug=debug)
-            result.extended_epsilon_closure(debug=debug)
-            result.epsilon_closure(debug=debug)
-            result.epsilon_closure(debug=debug)
-            result.extended_epsilon_closure(debug=debug)
-            result.extended_epsilon_closure(debug=debug)
-            result.extended_epsilon_closure(debug=debug)
-            result.epsilon_closure(debug=debug)
-            result.epsilon_closure(debug=debug)
-            result.epsilon_closure(debug=debug)
+            result.epsilon_closure_v2(debug)
+            result.extended_epsilon_closure_v2(debug)
+            result.epsilon_closure_v2(debug)
             result.minify()
-            result.epsilon_closure(debug=debug)
-            result.epsilon_closure(debug=debug)
-            result.epsilon_closure(debug=debug)
-            result.powerset_construction(debug=debug)
+            result.powerset_construction_v2(debug)
+            result.epsilon_closure_v2(debug)
+            result.extended_epsilon_closure_v2(debug)
+            result.epsilon_closure_v2(debug)
         return result
 
     def _append_edge(self, edge: Edge):
