@@ -2,7 +2,8 @@ from regex import *
 
 if __name__ == "__main__":
     print("WARNING: Did you mean to run this module directly?")
-    from debug_graph_viewer import MultiFigureViewer, DebugGraphViewer
+    from debug_graph_viewer import MultiFigureViewer, DebugGraphViewer, \
+        test_layouts_for
 
 
 def main():
@@ -15,15 +16,20 @@ def main():
     mfv = MultiFigureViewer()
 
     def debug(s, e, lbl):
+        # pass
         fig = DebugGraphViewer(s, e).render()
         fig.canvas.manager.set_window_title(lbl)
         mfv.add(fig)
-    # try:
-    rx = RegexBuilder(r"\sa|.b").build(
-        debug=debug)
-    mfv.add(DebugGraphViewer(rx.begin(), rx.end()).render())
-    # finally:
-    mfv.display()
+    try:
+        rx = RegexBuilder(r"\sa|.b").build(
+            debug=debug)
+        # while i := input():
+        #     print(i in rx)
+        mfv.add(DebugGraphViewer(rx.begin(), rx.end()).render())
+    except Exception as e:
+        print(e)
+    finally:
+        mfv.display()
     # test_layouts_for(rx.begin(), rx.end())
 
 if __name__ == "__main__":

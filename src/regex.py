@@ -1,9 +1,9 @@
 from enum import IntFlag, auto
 import functools
-from typing import Callable
+from typing import Any, Callable
 
 from funcutil import extend, negate, wrap, wrap_method
-from regexutil import CaptureGroup, ConsumeAny, ConsumeString, State, Edge, MatchConditions, \
+from regexutil import CaptureGroup, ConsumeAny, ConsumeString, SignedSet, State, Edge, MatchConditions, \
     _parser_symbols, _parser_symbols_escaped
 
 
@@ -73,7 +73,7 @@ class Regex:
             edge: Edge,
             _start: State,
             _end: State,
-            debug=lambda _: None):
+            debug) -> None:
         if (edge.is_free() and edge.previous == edge.next):
             next_state = edge.previous
             with edge:
@@ -118,7 +118,7 @@ class Regex:
             edge: Edge,
             _start: State,
             _end: State,
-            debug=lambda _: None):
+            debug) -> None:
         if (edge.is_free() and edge.previous == edge.next):
             next_state = edge.previous
             with edge:
@@ -145,7 +145,8 @@ class Regex:
     def powerset_construction(
             edge: Edge,
             _start: State,
-            _end: State):
+            _end: State,
+            debug) -> None:
         for other in edge.previous.next.copy():
             if edge.next == other.next:
                 continue
@@ -154,13 +155,10 @@ class Regex:
                 case left, intersect, right:
                     # We need to construct a "superposition" state
                     start_state = edge.previous
+                    debug(_start, _end,
+                          f"intersect {edge}, {other} at {start_state}")
                     new_state = edge.next.clone_shallow(reverse=False)
                     new_state.merge(other.next.clone_shallow(reverse=False))
-                    with edge:
-                        if left is not None:
-                            edge.predicate = left
-                        else:
-                            edge.remove(chain=True)
                     with other:
                         if right is not None:
                             other.predicate = right
@@ -169,6 +167,12 @@ class Regex:
                     with Edge(intersect) as intersect_edge:
                         intersect_edge.previous = start_state
                         intersect_edge.next = new_state
+                    with edge:
+                        if left is not None:
+                            edge.predicate = left
+                        else:
+                            edge.remove(chain=True)
+                            break  # edge removed, no more loop
 
 
     def minify(self):
@@ -197,7 +201,18 @@ class Regex:
                 else:
                     first.merge(second)
 
-
+    def match_in(self, string: str) -> bool:
+        ctx = MatchConditions(string)
+        current_state = self._start
+        while current_state != self._end:
+            for edge in current_state.next:
+                if edge.predicate(ctx):
+                    current_state = edge.next
+                    break
+            else:
+                return False
+        return True
+    __contains__ = match_in
 
 class RegexBuilder:
     class PatternParseError(Exception):
@@ -223,6 +238,7 @@ class RegexBuilder:
     _last_token: State
     _end: State
     _untied_ends: set[State]
+    _anchored: bool
 
     _capture_auto_id: int
 
@@ -237,6 +253,7 @@ class RegexBuilder:
         self._escaped = False
         self._start = self._last_token = self._end = State()
         self._untied_ends = set()
+        self._anchored = False
 
         self._capture_auto_id = _cid
 
@@ -321,11 +338,12 @@ class RegexBuilder:
             A set of all the conforming characters.
         """
         # TODO: handle ;)
+        raise NotImplementedError()
         # ranges:
         # {chr(i) for i in range(ord(start), ord(end) + 1)}
 
     def build(self,
-              *, debug: Callable[[State], None] = lambda _: None,
+              *, debug: Callable[[State], None] = lambda *_: None,
               _nested: bool = False) -> Regex:
         while self._cursor < len(self._pattern):
             if self._parse_char(self._consume_char(), _nested):
@@ -335,6 +353,17 @@ class RegexBuilder:
             with Edge() as e_move:
                 e_move.previous = end
                 e_move.next = self._end
+        if not _nested and not self._anchored:
+            debug(self._start, self._end, "make thing")
+            start_state = State()
+            with Edge(MatchConditions.consume_any) as loop:
+                loop.previous = start_state
+                loop.next = start_state
+            with Edge() as edge:
+                edge.previous = start_state
+                edge.next = self._start
+                edge.open(0)
+            self._start = start_state
         result = Regex(self._start, self._end)
         if not _nested:
             # pass
@@ -355,7 +384,7 @@ class RegexBuilder:
             result.epsilon_closure(debug=debug)
             result.epsilon_closure(debug=debug)
             result.epsilon_closure(debug=debug)
-            result.powerset_construction()
+            result.powerset_construction(debug=debug)
         return result
 
     def _append_edge(self, edge: Edge):
@@ -389,6 +418,8 @@ class RegexBuilder:
             # Special chars:
             # \A, \Z, \w, \d, etc...
             case ch, True if ch in _parser_symbols_escaped:
+                if ch == 'A':
+                    self._anchored = True
                 self._append_edge(Edge(_parser_symbols_escaped[ch]))
             # ^, $, ., etc...
             case ch, False if ch in _parser_symbols:
@@ -418,13 +449,17 @@ class RegexBuilder:
                 # sandbox to prevend out-of-order-ing sequenced loops
                 self._append_edge(Edge())
             case '[', False:  # Character class specifiers
+                negated = self._try_consume('^')
                 cls_specifier = self._consume_till_next(
                     ']', self._is_unescaped)
-                chars = self._chars_from_char_class(cls_specifier)
+                chars = SignedSet(
+                    self._chars_from_char_class(cls_specifier),
+                    negate=negated)
                 self._append_edge(Edge(ConsumeAny(chars)))
             case '{', False:  # n-quantifier
                 quantity = self._consume_till_next('}', self._is_unescaped)
                 # TODO: handle ;)
+                raise NotImplementedError()
             case '(', False:  # group
                 start_pos = self._cursor - 1
                 # Capture group time!

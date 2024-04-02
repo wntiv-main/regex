@@ -26,7 +26,7 @@ class represented_by:
         self._symbol = symbol
         self._escaped = escaped
 
-    def __call__(self, func: Callable[[*TArgs], T]) -> Callable[[*TArgs], T]:
+    def __call__(self, func: 'ParserPredicate') -> 'ParserPredicate':
         if self._escaped:
             _parser_symbols_escaped[self._symbol] = func
         else:
@@ -108,7 +108,7 @@ class SignedSet(Generic[T]):
         return len(self._accept)
 
     def unwrap_value(self) -> T:
-        assert len(self) == 1
+        assert self.length() == 1
         return self._accept.copy().pop()
 
     def __str__(self):
@@ -138,7 +138,7 @@ class ParserPredicate(ABC):
         match args:
             case (x,) if callable(x):
                 return self
-            case (MatchConditions(ctx),):
+            case (MatchConditions() as ctx,):
                 return self.evaluate(ctx)
             case _:
                 return TypeError(f"Invalid arguments to {self}()")
@@ -147,13 +147,13 @@ class ParserPredicate(ABC):
     def coverage(self) -> SignedSet[str]:
         ...
 
+    @abstractmethod
     def __hash__(self) -> int:
-        return hash(self.coverage())
+        ...
 
+    @abstractmethod
     def __eq__(self, other: Any) -> bool:
-        if isinstance(other, ParserPredicate):
-            return self.coverage() == other.coverage()
-        return NotImplemented
+        ...
 
 
 class GenericParserPredicate(ParserPredicate):
@@ -178,6 +178,14 @@ class GenericParserPredicate(ParserPredicate):
             'ParserPredicate']:
         return functools.partial(cls, coverage)
 
+    def __hash__(self) -> int:
+        return id(self._evaluate)
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, GenericParserPredicate):
+            return self._evaluate == other._evaluate
+        return NotImplemented
+
 
 class ConsumeString(ParserPredicate):
     match_string: str
@@ -186,8 +194,9 @@ class ConsumeString(ParserPredicate):
         self.match_string = match_string
 
     def evaluate(self, ctx: 'MatchConditions') -> bool:
-        if ctx._string[ctx._cursor:][0:len(self.match_string)] \
-                == self.match_string:
+        if (ctx._cursor + len(self.match_string) < len(ctx._string)
+            and ctx._string[ctx._cursor:][0:len(self.match_string)]
+                == self.match_string):
             ctx._cursor += len(self.match_string)
             return True
         return False
@@ -197,6 +206,16 @@ class ConsumeString(ParserPredicate):
         assert len(self.match_string) == 1
         return SignedSet((self.match_string,))
 
+    def __hash__(self) -> int:
+        return hash(self.match_string)
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, ConsumeString):
+            return self.match_string == other.match_string
+        if isinstance(other, ConsumeAny):
+            return (other.match_set.length() == 1
+                    and other.match_set.unwrap_value() == self.match_string)
+        return NotImplemented
 
 class ConsumeAny(ParserPredicate):
     match_set: SignedSet[str]
@@ -205,7 +224,8 @@ class ConsumeAny(ParserPredicate):
         self.match_set = SignedSet(match_set)
 
     def evaluate(self, ctx: 'MatchConditions') -> bool:
-        if ctx._string[ctx._cursor:][0] in self.match_set:
+        if (not ctx.end() and
+                ctx._string[ctx._cursor:][0] in self.match_set):
             ctx._cursor += 1
             return True
         return False
@@ -216,6 +236,16 @@ class ConsumeAny(ParserPredicate):
     def __neg__(self) -> 'ConsumeAny':
         return ConsumeAny(-self.match_set)
 
+    def __hash__(self) -> int:
+        return hash(self.match_set)
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, ConsumeAny):
+            return self.match_set == other.match_set
+        if isinstance(other, ConsumeString):
+            return (self.match_set.length() == 1
+                    and self.match_set.unwrap_value() == other.match_string)
+        return NotImplemented
 
 class MatchConditions:
     _alpha = {chr(i) for i in range(ord('a'), ord('z') + 1)}\
@@ -225,67 +255,57 @@ class MatchConditions:
     _string: str
     _cursor: int
 
-    # def try_consume(self, *, match_string: str) -> bool:
-    #     if self._string[self._cursor:][0:len(match_string)] == match_string:
-    #         self._cursor += len(match_string)
-    #         return True
-    #     return False
+    def __init__(self, string: str) -> None:
+        self._string = string
+        self._cursor = 0
 
-    # def try_consume_any(self, *, match_set: set[str]) -> bool:
-    #     if self._string[self._cursor:][0] in match_set:
-    #         self._cursor += 1
-    #         return True
-    #     return False
-
-    # To Python conventions,
-    # How THE $*@&* am I meant to embed a link if the link is longer
-    # than the line length limitation for comments, without breaking the
-    # link? Here, yet another reason why line length limnitations are
-    # &$#*.
-    # rant over '~'
     # https://en.wikipedia.org/wiki/Nondeterministic_finite_automaton#%CE%B5-closure_of_a_state_or_set_of_states
-
     @GenericParserPredicate.of(coverage=SignedSet(negate=True))
     def epsilon_transition(self) -> bool:
         return True
 
+    @ConsumeAny(SignedSet(negate=True))
+    def consume_any(self): ...
+
 # region regex tokens
     @represented_by(symbol="d", escaped=True)
     @ConsumeAny(_digits)
-    def consume_digit(self): pass
+    def consume_digit(self): ...
 
     @represented_by("D", escaped=True)
     @-consume_digit
-    def consume_not_digit(self): pass
+    def consume_not_digit(self): ...
 
     @represented_by("w", escaped=True)
     @ConsumeAny(_alpha | _digits | {"_"})
-    def consume_alphanum(self): pass
+    def consume_alphanum(self): ...
 
     @represented_by("W", escaped=True)
     @-consume_alphanum
-    def consume_not_alphanum(self): pass
+    def consume_not_alphanum(self): ...
 
     @represented_by("s", escaped=True)
     @ConsumeAny(" \r\n\t\v\f")
-    def consume_whitespace(self): pass
+    def consume_whitespace(self): ...
 
     @represented_by("S", escaped=True)
     @-consume_whitespace
-    def consume_not_whitespace(self): pass
+    def consume_not_whitespace(self): ...
 
     @ConsumeAny("\r\n")
-    def consume_newline(self): pass
+    def consume_newline(self): ...
 
     @represented_by(".")
     @-consume_newline
-    def consume_not_newline(self): pass
+    def consume_not_newline(self): ...
 
     @represented_by("Z", escaped=True)
+    @GenericParserPredicate.of(coverage=SignedSet())
     def end(self) -> bool:
         return self._cursor >= len(self._string)
 
     @represented_by("A", escaped=True)
+    @GenericParserPredicate.of(coverage=SignedSet(negate=True))
     def begin(self):
         return self._cursor <= 0
 # endregion regex tokens
@@ -294,6 +314,9 @@ class MatchConditions:
 CaptureGroup: TypeAlias = int | str
 
 class State:
+    """
+    Represents a node in the finite-state automaton
+    """
     _replaced_with: 'State | None' = None
     next: set['Edge']
     previous: set['Edge']
@@ -381,6 +404,9 @@ class State:
 
 
 class Edge(UnsafeMutable):
+    """
+    Represents the line ("edge") between two States in the automaton
+    """
     _next: State = Mutable
     next: State  # type hints, impl is property()
     _previous: State = Mutable
@@ -481,7 +507,7 @@ class Edge(UnsafeMutable):
         if isinstance(self.predicate, ConsumeAny):
             return str(self.predicate.match_set)
         # TODO: handle more cases
-        return "Unknown"
+        raise NotImplementedError()
 
     # Debug representation for DebugGraphViewer
     def __repr__(self) -> str:
