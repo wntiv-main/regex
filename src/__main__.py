@@ -21,11 +21,11 @@ def main():
         fig.canvas.manager.set_window_title(lbl)
         mfv.add(fig)
     try:
-        rx = RegexBuilder(r"\sa|.b").build(
+        rx = RegexBuilder(r"a|b").build(
             debug=debug)
         # while i := input():
         #     print(i in rx)
-        mfv.add(DebugGraphViewer(rx.begin(), rx.end()).render())
+        mfv.add(DebugGraphViewer(rx.start, rx.end).render())
     except Exception as e:
         print(e)
         raise e
