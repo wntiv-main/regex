@@ -123,25 +123,27 @@ class Regex:
         if (edge.predicate == MatchConditions.epsilon_transition
                 and (edge.has_opens() or edge.has_closes())):
             with edge:
-                if edge.has_opens() and edge.next.inputs() == 1:
+                if edge.has_opens() and edge.next.inputs() == 0:
+                    paths = edge.next.next.copy()
                     try:  # spoof with statement dont question it
-                        for path in edge.next.next:
+                        for path in paths:
                             path.__enter__()
                         for group in edge.move_opens():
-                            for path in edge.next.next:
+                            for path in paths:
                                 path.open(group)
                     finally:
-                        for path in edge.next.next:
+                        for path in paths:
                             path.__exit__(*(None,)*3)
-                if edge.has_closes() and edge.previous.outputs() == 1:
+                if edge.has_closes() and edge.previous.outputs() == 0:
+                    paths = edge.previous.previous.copy()
                     try:  # spoof with statement dont question it
-                        for path in edge.previous.previous:
+                        for path in paths:
                             path.__enter__()
                         for group in edge.move_closes():
-                            for path in edge.previous.previous:
+                            for path in paths:
                                 path.close(group)
                     finally:
-                        for path in edge.previous.previous:
+                        for path in paths:
                             # cursed dont question it
                             path.__exit__(*(None,)*3)
         # merge states connected by e-moves
