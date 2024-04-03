@@ -25,7 +25,7 @@ class GraphWalker(Generic[*TArgs], ABC):
         while self._to_explore:
             self._current_state = self._to_explore.pop()
             for edge in self._current_state.next.copy():
-                if self.visit(edge, self, *args, **kwargs):
+                if self.visit(edge, *args, **kwargs):
                     break
 
     def add_state(self, state) -> None:
