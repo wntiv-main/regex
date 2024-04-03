@@ -1,4 +1,4 @@
-from regex import *
+from regex_builder import *
 
 if __name__ == "__main__":
     print("WARNING: Did you mean to run this module directly?")
