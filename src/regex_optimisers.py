@@ -104,8 +104,7 @@ class EpsilonClosure(GraphWalker):
         # into 2 - one for the e-move, one for the other connections
         if (edge.is_free()
                 and edge.previous.outputs() > 1
-                and edge.next.inputs() > 1
-                and edge.next != self.end()):
+                and edge.next.inputs() > 1):
             new_state = edge.next.clone_shallow(Direction.FORWARD)
             edge.previous.merge(new_state)
             # TODO: fix?
@@ -167,7 +166,7 @@ class PowersetConstruction(GraphWalker):
                           f"test :0")
                     self.retry_state()
                     # please dont question it
-                    EpsilonClosure.visit(self, new_right_edge, debug)
-                    EpsilonClosure.visit(self, new_left_edge, debug)
+                    # EpsilonClosure.visit(self, new_right_edge, debug)
+                    # EpsilonClosure.visit(self, new_left_edge, debug)
                     break
         return True

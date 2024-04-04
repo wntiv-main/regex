@@ -161,7 +161,11 @@ class RegexBuilder:
         if not _nested:
             # pass
             EpsilonClosure(result).walk(debug)
-            PowersetConstruction(result).walk(debug)
+            for i in range(5):
+                PowersetConstruction(result).walk(debug)
+                EpsilonClosure(result).walk(debug)
+            # PowersetConstruction(result).walk(debug)
+            # EpsilonClosure(result).walk(debug)
             # result.epsilon_closure_v2(debug)
             # result.extended_epsilon_closure_v2(debug)
             # result.epsilon_closure_v2(debug)
