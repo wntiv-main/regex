@@ -313,6 +313,13 @@ class MatchConditions:
 
 CaptureGroup: TypeAlias = int | str
 
+
+class Direction(IntFlag):
+    NONE = 0
+    FORWARD = auto()
+    REVERSE = auto()
+    BOTH = FORWARD | REVERSE
+
 class State:
     """
     Represents a node in the finite-state automaton
@@ -359,22 +366,23 @@ class State:
                 edge.previous = self
         other._replaced_with = self
 
-    def clone_shallow(self, *, reverse: bool = True) -> 'State':
+    def clone_shallow(self, direction: Direction = Direction.BOTH) -> 'State':
         new = State()
-        for edge in self.next.copy():
-            with edge.clone_shallow() as new_edge:
-                # if edge.next == self:
-                #     new_edge.next = new
-                # else:
-                new_edge.next = edge.next
-                new_edge.previous = new
-        if reverse:
+        if direction & Direction.FORWARD:
+            for edge in self.next.copy():
+                with edge.clone_shallow() as new_edge:
+                    # if edge.next == self:
+                    #     new_edge.next = new
+                    # else:
+                    new_edge.next = edge.next
+                    new_edge.previous = new
+        if direction & Direction.REVERSE:
             for edge in self.previous.copy():
                 with edge.clone_shallow() as new_edge:
-                    if edge.previous == self:
-                        new_edge.previous = new
-                    else:
-                        new_edge.previous = edge.previous
+                    # if edge.previous == self:
+                    #     new_edge.previous = new
+                    # else:
+                    new_edge.previous = edge.previous
                     new_edge.next = new
         return new
 

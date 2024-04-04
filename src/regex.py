@@ -3,7 +3,7 @@ from typing import Callable
 
 
 from funcutil import wrap_method
-from regexutil import State, Edge, MatchConditions
+from regexutil import Direction, State, Edge, MatchConditions
 
 
 class Regex:
@@ -161,7 +161,7 @@ class Regex:
                 and edge.previous.outputs() > 1
                 and edge.next.inputs() > 1):
             debug(_start, _end, f"{edge}: spliting {edge.next}")
-            new_state = edge.next.clone_shallow(reverse=False)
+            new_state = edge.next.clone_shallow(Direction.FORWARD)
             edge.previous.merge(new_state)
             if edge.next == _end:
                 with Edge() as new_edge:
@@ -187,8 +187,9 @@ class Regex:
                     start_state = edge.previous
                     debug(_start, _end,
                           f"intersect {edge}, {other} at {start_state}")
-                    new_state = edge.next.clone_shallow(reverse=False)
-                    new_state.merge(other.next.clone_shallow(reverse=False))
+                    new_state = edge.next.clone_shallow(Direction.FORWARD)
+                    new_state.merge(
+                        other.next.clone_shallow(Direction.FORWARD))
                     with other:
                         if right is not None:
                             other.predicate = right

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Generic, TypeVarTuple
 
 from regex import Regex
-from regexutil import Edge, MatchConditions, State
+from regexutil import Direction, Edge, MatchConditions, State
 
 
 TArgs = TypeVarTuple("TArgs")
@@ -104,25 +104,32 @@ class EpsilonClosure(GraphWalker):
         # into 2 - one for the e-move, one for the other connections
         if (edge.is_free()
                 and edge.previous.outputs() > 1
-                and edge.next.inputs() > 1):
-            new_state = edge.next.clone_shallow(reverse=False)
+                and edge.next.inputs() > 1
+                and edge.next != self.end()):
+            new_state = edge.next.clone_shallow(Direction.FORWARD)
             edge.previous.merge(new_state)
+            # TODO: fix?
             if edge.next == self.end():
-                with Edge() as new_edge:
-                    new_edge.previous = edge.previous
-                    new_edge.next = self.end()
+                self.end().merge(
+                    edge.previous.clone_shallow(Direction.REVERSE))
+                # with Edge() as new_edge:
+                #     new_edge.previous = edge.previous
+                #     new_edge.next = self.end()
             with edge:
                 edge.remove()
             debug(self.begin(), self.end(),
                   f"{edge}: split {edge.next} to {new_state}")
             self.retry_state()
             return True  # new edges on state, edge removed
+        return False
 
 
 class PowersetConstruction(GraphWalker):
     def visit(self, edge: Edge, debug) -> bool:
+        if edge.is_free():
+            return False
         for other in edge.previous.next.copy():
-            if edge.next == other.next:
+            if edge.next == other.next or other.is_free():
                 continue
             match edge.predicate_intersection(other):
                 case None: continue
@@ -156,12 +163,11 @@ class PowersetConstruction(GraphWalker):
                         else:
                             for state in edge.remove_chain():
                                 self.remove_state(state)
-                            self.retry_state()
                     debug(self.begin(), self.end(),
                           f"test :0")
-                    return (edge.next 
-                            # please dont question it
-                            or EpsilonClosure.visit(self, new_left_edge, debug)
-                            or EpsilonClosure.visit(self, new_right_edge, debug))
-        # Dont get confused now
+                    self.retry_state()
+                    # please dont question it
+                    EpsilonClosure.visit(self, new_right_edge, debug)
+                    EpsilonClosure.visit(self, new_left_edge, debug)
+                    break
         return True
