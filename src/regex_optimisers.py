@@ -131,8 +131,18 @@ class PowersetConstruction(GraphWalker):
                     start_state = edge.previous
                     debug(self.begin(), self.end(),
                           f"intersect {edge}, {other} at {start_state}")
-                    new_state = edge.next.clone_shallow(reverse=False)
-                    new_state.merge(other.next.clone_shallow(reverse=False))
+                    new_state = State()
+                    with Edge(intersect) as intersect_edge:
+                        intersect_edge.previous = start_state
+                        intersect_edge.next = new_state
+                    new_left_edge = Edge()
+                    new_right_edge = Edge()
+                    with new_left_edge:
+                        new_left_edge.previous = new_state
+                        new_left_edge.next = edge.next
+                    with new_right_edge:
+                        new_right_edge.previous = new_state
+                        new_right_edge.next = other.next
                     self.add_state(new_state)
                     with other:
                         if right is not None:
@@ -140,9 +150,6 @@ class PowersetConstruction(GraphWalker):
                         else:
                             for state in other.remove_chain():
                                 self.remove_state(state)
-                    with Edge(intersect) as intersect_edge:
-                        intersect_edge.previous = start_state
-                        intersect_edge.next = new_state
                     with edge:
                         if left is not None:
                             edge.predicate = left
@@ -150,6 +157,11 @@ class PowersetConstruction(GraphWalker):
                             for state in edge.remove_chain():
                                 self.remove_state(state)
                             self.retry_state()
-                            return True
+                    debug(self.begin(), self.end(),
+                          f"test :0")
+                    return (edge.next 
+                            # please dont question it
+                            or EpsilonClosure.visit(self, new_left_edge, debug)
+                            or EpsilonClosure.visit(self, new_right_edge, debug))
         # Dont get confused now
         return True
