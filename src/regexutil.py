@@ -52,7 +52,7 @@ class SignedSet(Generic[T]):
         return SignedSet(self, True)
 
     def __contains__(self, value: T):
-        return bool(self._negate ^ (value in self._accept))
+        return (self._negate ^ (value in self._accept))
 
     def intersection(self, other: 'SignedSet') -> 'SignedSet':
         match self._negate, other._negate:
@@ -194,7 +194,7 @@ class ConsumeString(ParserPredicate):
         self.match_string = match_string
 
     def evaluate(self, ctx: 'MatchConditions') -> bool:
-        if (ctx._cursor + len(self.match_string) < len(ctx._string)
+        if (ctx._cursor + len(self.match_string) <= len(ctx._string)
             and ctx._string[ctx._cursor:][0:len(self.match_string)]
                 == self.match_string):
             ctx._cursor += len(self.match_string)
@@ -224,8 +224,8 @@ class ConsumeAny(ParserPredicate):
         self.match_set = SignedSet(match_set)
 
     def evaluate(self, ctx: 'MatchConditions') -> bool:
-        if (not ctx.end() and
-                ctx._string[ctx._cursor:][0] in self.match_set):
+        if (not ctx.end(ctx) and
+                ctx._string[ctx._cursor] in self.match_set):
             ctx._cursor += 1
             return True
         return False
@@ -410,6 +410,16 @@ class State:
             result ^= set((mod_edge,))
         return result
 
+    def input_diff(self, other: 'State'):
+        result = self.previous.copy()
+        for edge in other.previous:
+            mod_edge = edge.clone_shallow()
+            # This is unsafe make sure this edge never gets used
+            mod_edge._next = self
+            mod_edge._previous = edge.previous
+            result ^= set((mod_edge,))
+        return result
+
 
 class Edge(UnsafeMutable):
     """
@@ -460,19 +470,24 @@ class Edge(UnsafeMutable):
             self._previous._connect_next(self)
         return super().__exit__(*args)
 
+    @staticmethod
+    def _predicate_trivially_mergable(predicate: ParserPredicate):
+        return isinstance(predicate, (ConsumeAny, ConsumeString)) \
+            or predicate == MatchConditions.epsilon_transition
+
     def predicate_intersection(self, other: 'Edge')\
             -> None | tuple[ParserPredicate | None,
                             ParserPredicate,
                             ParserPredicate | None]:
+        # trivial case
+        if other._predicate == self._predicate:
+            return None, self._predicate, None
         self_coverage = self.predicate.coverage()
         other_coverage = other.predicate.coverage()
         if not (self_coverage & other_coverage):
             return None
-        string_matches = (ConsumeAny,
-                          ConsumeString,
-                          GenericParserPredicate)
-        if (isinstance(self.predicate, string_matches)
-                and isinstance(other.predicate, string_matches)):
+        if (Edge._predicate_trivially_mergable(self.predicate)
+                and Edge._predicate_trivially_mergable(other.predicate)):
             # Left side
             left_set = self_coverage - other_coverage
             if not left_set:

@@ -161,19 +161,25 @@ class RegexBuilder:
         if not _nested:
             # pass
             EpsilonClosure(result).walk(debug)
-            for i in range(5):
-                PowersetConstruction(result).walk(debug)
-                EpsilonClosure(result).walk(debug)
+            PowersetConstruction(result).walk(debug)
+            result.minify()
+            EpsilonClosure(result).walk(debug)
+            PowersetConstruction(result).walk(debug)
+            result.minify()
+            EpsilonClosure(result).walk(debug)
             # PowersetConstruction(result).walk(debug)
             # EpsilonClosure(result).walk(debug)
             # result.epsilon_closure_v2(debug)
             # result.extended_epsilon_closure_v2(debug)
             # result.epsilon_closure_v2(debug)
-            result.minify()
             # result.powerset_construction_v2(debug)
             # result.epsilon_closure_v2(debug)
             # result.extended_epsilon_closure_v2(debug)
             # result.epsilon_closure_v2(debug)
+        while result._start._replaced_with is not None:
+            result._start = result._start._replaced_with
+        while result._end._replaced_with is not None:
+            result._end = result._end._replaced_with
         return result
 
     def _append_edge(self, edge: Edge):
@@ -189,10 +195,10 @@ class RegexBuilder:
             if group_id is not None:
                 start_edge.open(group_id)
                 end_edge.close(group_id)
-
             start_edge.previous = self._end
-            start_edge.next = rx.begin()
-            end_edge.previous = rx.end()
+            self._last_token = self._end
+            start_edge.next = rx.start
+            end_edge.previous = rx.end
             self._end = State()
             end_edge.next = self._end
 

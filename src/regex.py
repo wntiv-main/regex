@@ -207,27 +207,32 @@ class Regex:
 
 
     def minify(self):
-        states: set[State] = set()
-        to_explore: list[State] = [self._start]
-        while to_explore:
-            exploring = to_explore.pop()
-            if exploring in states:
-                continue
-            states.add(exploring)
-            for edge in exploring.next:
-                if edge.next == exploring:
-                    continue
-                to_explore.append(edge.next)
-        states_list = list(states)
+        states_list = list(self.states())
         for i in range(len(states_list) - 1):  # exclude last
             first = states_list[i]
+            if first._replaced_with is not None:
+                continue
             # only iterate forward states
             for second in states_list[i + 1:]:
+                if second._replaced_with is not None:
+                    continue
+                # outputs
                 diff = first.output_diff(second)
                 for edge in diff:
                     # TODO: this is wrong. fix
+                    # TODO: why is this wrong again?
                     if not edge.is_free() or (edge.next != first
                                               and edge.next != second):
+                        break
+                else:
+                    first.merge(second)
+                # inputs
+                reverse_diff = first.input_diff(second)
+                for edge in reverse_diff:
+                    # TODO: this is wrong. fix
+                    # TODO: why is this wrong again?
+                    if not edge.is_free() or (edge.previous != first
+                                              and edge.previous != second):
                         break
                 else:
                     first.merge(second)
@@ -236,8 +241,12 @@ class Regex:
         ctx = MatchConditions(string)
         current_state = self._start
         while current_state != self._end:
+            # print(f"matching on {current_state}")
             for edge in current_state.next:
+                # print(f"'{ctx._string}', trying {edge}\n"
+                #       f" {' ' * ctx._cursor}^- from here")
                 if edge.predicate(ctx):
+                    # print("matched")
                     current_state = edge.next
                     break
             else:

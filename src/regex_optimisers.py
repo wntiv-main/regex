@@ -24,6 +24,8 @@ class GraphWalker(Generic[*TArgs], ABC):
     def walk(self, *args: *TArgs, **kwargs):
         while self._to_explore:
             self._current_state = self._to_explore.pop()
+            # bye bye performance
+            self._regex.minify()
             for edge in self._current_state.next.copy():
                 if self.visit(edge, *args, **kwargs):
                     break
@@ -67,6 +69,7 @@ class EpsilonClosure(GraphWalker):
             with edge:
                 if edge.has_opens() and edge.next.inputs() == 0:
                     paths = edge.next.next.copy()
+                    paths.discard(edge)  # Do not modify current edge
                     try:  # spoof with statement dont question it
                         for path in paths:
                             path.__enter__()
@@ -91,8 +94,9 @@ class EpsilonClosure(GraphWalker):
 
         # merge states connected by e-moves
         if (edge.is_free()
-            and (edge.previous.outputs() == 1
-                 or edge.next.inputs() == 1)):
+                and ((edge.previous.outputs() == 1
+                      and edge.previous != self.end())
+                     or edge.next.inputs() == 1)):
             debug_str = f"{edge}: merge {edge.next} with {edge.previous}"
             edge.next.merge(edge.previous)
             self.remove_state(edge.previous)
