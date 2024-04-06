@@ -21,7 +21,7 @@ def main():
         fig.canvas.manager.set_window_title(lbl)
         mfv.add(fig)
     try:
-        rx = RegexBuilder(r"\A(?:a?b?c?)*").build(
+        rx = RegexBuilder(r"(?:a?b?c?)*").build(
             debug=debug)
         while i := input():
             print(i in rx)

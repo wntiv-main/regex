@@ -146,17 +146,6 @@ class RegexBuilder:
             with Edge() as e_move:
                 e_move.previous = end
                 e_move.next = self._end
-        if not _nested and not self._anchored:
-            debug(self._start, self._end, "make thing")
-            start_state = State()
-            with Edge(MatchConditions.consume_any) as loop:
-                loop.previous = start_state
-                loop.next = start_state
-            with Edge() as edge:
-                edge.previous = start_state
-                edge.next = self._start
-                edge.open(0)
-            self._start = start_state
         result = Regex(self._start, self._end)
         if not _nested:
             # pass
@@ -166,7 +155,20 @@ class RegexBuilder:
             EpsilonClosure(result).walk(debug)
             PowersetConstruction(result).walk(debug)
             result.minify()
+            if not self._anchored:
+                debug(result.start, result.end, "make thing")
+                start_state = State()
+                with Edge(MatchConditions.consume_any) as loop:
+                    loop.previous = start_state
+                    loop.next = start_state
+                with Edge() as edge:
+                    edge.previous = start_state
+                    edge.next = result.start
+                    edge.open(0)
+                result.start = start_state
             EpsilonClosure(result).walk(debug)
+            PowersetConstruction(result).walk(debug)
+            result.minify()
             # PowersetConstruction(result).walk(debug)
             # EpsilonClosure(result).walk(debug)
             # result.epsilon_closure_v2(debug)
@@ -176,10 +178,10 @@ class RegexBuilder:
             # result.epsilon_closure_v2(debug)
             # result.extended_epsilon_closure_v2(debug)
             # result.epsilon_closure_v2(debug)
-        while result._start._replaced_with is not None:
-            result._start = result._start._replaced_with
-        while result._end._replaced_with is not None:
-            result._end = result._end._replaced_with
+        # while result._start._replaced_with is not None:
+        #     result._start = result._start._replaced_with
+        # while result._end._replaced_with is not None:
+        #     result._end = result._end._replaced_with
         return result
 
     def _append_edge(self, edge: Edge):
