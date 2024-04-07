@@ -1,7 +1,7 @@
 __all__ = ["PatternParseError", "Regex", "State"]
 __author__ = "Callum Hynes"
 
-from typing import Any, Callable, Self, TypeAlias, overload
+from typing import Any, Callable, Self, Sequence, TypeAlias, overload
 import numpy as np
 
 from regexutil import CaptureGroup, ConsumeAny, ConsumeString, \
@@ -322,19 +322,23 @@ class Regex:
         return self.transition_table.shape[0]
     __len__ = size.fget
 
-    def _expand(self, size):
-        # TODO: more performant method??
-        old_size = self.size
-        new_size = self.size + size
-        # add vertical space
-        self.transition_table.resize((new_size, old_size), refcheck=False)
-        temp = self.transition_table.T.copy()
-        temp.resize((new_size, new_size), refcheck=False)
-        self.transition_table = temp.T.copy()
+    @staticmethod
+    def _empty_arr(size: Sequence[int]):
+        return np.fromfunction(lambda *_: set(), size)
+
+    # def _expand(self, size):
+    #     # TODO: more performant method??
+    #     old_size = self.size
+    #     new_size = self.size + size
+    #     # add vertical space
+    #     self.transition_table.resize((new_size, old_size), refcheck=False)
+    #     temp = self.transition_table.T.copy()
+    #     temp.resize((new_size, new_size), refcheck=False)
+    #     self.transition_table = temp.T.copy()
 
     def append_state(self) -> State:
         # Resize table to have new state at end
-        self._expand(1)
+        self._diagonal_block_with(Regex._empty_arr((1, 1)))
         return self.end
 
     def connect(self,
@@ -366,19 +370,24 @@ class Regex:
         for edge in it:
             self.connect(it.index, s1_idx, edge)
 
+    def _diagonal_block_with(self, other: np.ndarray):
+        # constructs block matrix like:
+        # [[self,  empty]
+        #  [empty, other]]
+        self.transition_table = np.block((
+            (self.transition_table, Regex._empty_arr((self.size,
+                                                      other.shape[1]))),
+            (Regex._empty_arr((other.shape[0], self.size)), other)))
+
     def __iadd__(self, other: Any) -> Self:
-        # TODO: https://numpy.org/doc/stable/reference/generated/numpy.block.html#numpy.block
         if isinstance(other, Regex):
             other = other.copy()
             initial_end = self.end
             offset = self.size
-            self._expand(other.size)
+            self._diagonal_block_with(other.transition_table)
             # Connect our end to their start
             self.connect(initial_end, offset + other.start,
                          MatchConditions.epsilon_transition)
-            # Copy their data into ours
-            self.transition_table[offset:,
-                                  offset:] = other.transition_table
         elif isinstance(other, ParserPredicate):
             old_end = self.end
             new_state = self.append_state()
@@ -391,16 +400,13 @@ class Regex:
         other = other.copy()
         initial_end = self.end
         offset = self.size
-        self._expand(other.size)
+        self._diagonal_block_with(other.transition_table)
         # Connect our start to their start
         self.connect(self.start, offset + other.start,
                      MatchConditions.epsilon_transition)
         # Connect our end to their end
         self.connect(initial_end, offset + other.end,
                      MatchConditions.epsilon_transition)
-        # Copy their data into ours
-        self.transition_table[offset:,
-                              offset:] = other.transition_table
         return self
 
     def optional(self) -> Self:
