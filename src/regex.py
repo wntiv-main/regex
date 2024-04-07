@@ -349,26 +349,54 @@ class Regex:
             self.transition_table[start_state, end_state] = set()
         self.transition_table[start_state, end_state].add(connection)
 
+    def connect_many(self,
+                     start_state: State,
+                     end_state: State,
+                     connections: set[ParserPredicate]) -> None:
+        if not self.transition_table[start_state, end_state]:
+            self.transition_table[start_state, end_state] = set()
+        self.transition_table[start_state, end_state] |= connections
+
     def _epsilon_closure(self):
         pass
 
     def _minimisation(self):
-        for i in range(self.size):
-            pass
+        to_remove: set[State] = set()
+        for i in range(self.size - 1):
+            for j in range(i + 1, self.size):
+                # TODO: more robust comparison
+                if self.transition_table[i] == self.transition_table[j]:
+                    self._merge(i, j)
+                    to_remove.add(j)
+        # Remove in reverse to avoid deletions mis-ordering the matrix
+        for state in sorted(to_remove, reverse=True):
+            self._remove_state(state)
+
+    def _remove_state(self, state: State) -> None:
+        # remove both row and column for `state`
+        self.transition_table = np.delete(
+            np.delete(
+                self.transition_table,
+                state, 0),
+            state, 1)
 
     def _merge_outputs(self, s1_idx: State, s2_idx: State) -> None:
         # Iterate s2 row and make same connections from s1
         it = np.nditer(self.transition_table[s2_idx, :],
                        flags=['c_index'])
-        for edge in it:
-            self.connect(s1_idx, it.index, edge)
+        for edges in it:
+            self.connect_many(s1_idx, it.index, edges)
 
     def _merge_inputs(self, s1_idx: State, s2_idx: State) -> None:
         # Iterate s2 column and make same connections to s1
         it = np.nditer(self.transition_table[:, s2_idx],
                        flags=['c_index'])
-        for edge in it:
-            self.connect(it.index, s1_idx, edge)
+        for edges in it:
+            self.connect_many(it.index, s1_idx, edges)
+
+    def _merge(self, s1_idx: State, s2_idx: State) -> None:
+        self._merge_inputs(s1_idx, s2_idx)
+        self._merge_outputs(s1_idx, s2_idx)
 
     def _diagonal_block_with(self, other: np.ndarray):
         # constructs block matrix like:
