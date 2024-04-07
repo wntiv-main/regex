@@ -49,7 +49,7 @@ class _RegexFactory:
         self._capture_auto_id = _cid
         self._cursor_started = _open_bracket_pos
 
-    def _append(self, connection: ParserPredicate | 'Regex') -> None:
+    def _append(self, connection: 'ParserPredicate | Regex') -> None:
         if isinstance(connection, ParserPredicate):
             connection = Regex(connection, _privated=None)
         self._regex += self._last_token
@@ -307,7 +307,7 @@ class Regex:
                 return result
             case (), {"_privated": _}:
                 result = super().__new__(cls)
-                result.transition_table = Regex._empty_arr(1)
+                result.transition_table = Regex._empty_arr((1, 1))
                 result.start = 0
                 result.end = 0
                 return result
@@ -324,7 +324,8 @@ class Regex:
 
     @staticmethod
     def _empty_arr(size: Sequence[int]):
-        return np.fromfunction(lambda *_: set(), size, dtype=set)
+        # if only np.fromfunction() worked :(
+        return np.vectorize(lambda _: set())(np.empty(size, dtype=set))
 
     def append_state(self) -> State:
         # Resize table to have new state at end
