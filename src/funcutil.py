@@ -1,38 +1,48 @@
 import functools
-from typing import Any, Callable, Self, TypeAlias, TypeVar, TypeVarTuple
+from typing import Callable, Concatenate, Optional, ParamSpec, TypeAlias, TypeVar
 
-
+S = TypeVar("S")
 T = TypeVar("T")
 T2 = TypeVar("T2")
-TArgs = TypeVarTuple("TArgs")
-TArgs2 = TypeVarTuple("TArgs2")
+TArgs = ParamSpec("TArgs")
+TArgs2 = ParamSpec("TArgs2")
 
 
-def curry(func: Callable[[Any], T]) -> Callable[[Any], Callable[[Any], T]]:
+def optional_chain(func: Callable[[T], T2]) \
+        -> Callable[[Optional[T]], Optional[T2]]:
+    return lambda x: None if x is None else func(x)
+
+
+def optional_chain_method(func: Callable[[S, T], T2]) \
+        -> Callable[[S, Optional[T]], Optional[T2]]:
+    return lambda self, x: None if x is None else func(self, x)
+
+
+def curry(func: Callable[..., T]) -> Callable[..., Callable[..., T]]:
     return functools.partial(functools.partial, func)
 
 
 class extend:
-    _func_impl: Callable[[*TArgs2], T]
+    _func_impl: Callable[TArgs2, T]
 
     def __init__(
             self,
             function_implementation: Callable[..., T],
-            *args: *TArgs, **kwargs):
+            *args, **kwargs):
         self._func_impl = functools.partial(
             function_implementation, *args, **kwargs)
 
-    def __call__(self, _: Callable[[*TArgs2], None])\
-            -> Callable[[*TArgs2], T]:
+    def __call__(self, _: Callable[TArgs2, None])\
+            -> Callable[TArgs2, T]:
         return self._func_impl
 
 
-WrappedFunction: TypeAlias = Callable[[*TArgs2], T2]
-InnerFunction: TypeAlias = Callable[[*TArgs], T]
+WrappedFunction: TypeAlias = Callable[TArgs2, T2]
+InnerFunction: TypeAlias = Callable[TArgs, T]
 
 
 def wrap(
-        wrapper_function: Callable[[InnerFunction, *TArgs2], T2],
+        wrapper_function: Callable[Concatenate[InnerFunction, TArgs2], T2],
         *args,
         **kwargs) -> Callable[[InnerFunction], WrappedFunction]:
     def wrap_decorator(inner_function: InnerFunction) -> WrappedFunction:
@@ -42,7 +52,7 @@ def wrap(
 
 
 def wrap_method(
-        wrapper_function: Callable[[InnerFunction, *TArgs2], T2],
+        wrapper_function: Callable[Concatenate[InnerFunction, TArgs2], T2],
         *args,
         **kwargs) -> Callable[[InnerFunction], WrappedFunction]:
     def wrap_decorator(inner_function: InnerFunction) -> WrappedFunction:
@@ -50,88 +60,15 @@ def wrap_method(
                                        *args, **kwargs)
     return wrap_decorator
 
-# def extend(
-#         _: Callable[[*TArgs], None],
-#         function_implementation: Callable[[*TArgs], T],
-#         *args, **kwargs) -> Callable[[*TArgs], T]:
-#     return functools.partialmethod(function_implementation, *args, **kwargs)
 
-
-def negate(func: Callable[[*TArgs], bool]) -> Callable[[*TArgs], bool]:
+def negate(func: Callable[TArgs, bool]) -> Callable[TArgs, bool]:
     def wrapper(*args, **kwargs):
         return not func(*args, **kwargs)
     return wrapper
+
 
 def _hash_set(value: set) -> int:
     result = 0
     for element in value:
         result ^= hash(element)
     return result
-
-
-class _MutableType:
-    _instance: '_MutableType' = None
-    __slots__ = ()
-
-    def __new__(cls) -> Self:
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
-
-Mutable = _MutableType()
-
-class _UnsafeMutable(type):
-    @staticmethod
-    def _property(name: str) -> property:
-        @property
-        def prop(self):
-            return getattr(self, name)
-
-        @prop.setter
-        def prop(self, value):
-            if self._UnsafeMutable__currently_mutable:
-                setattr(self, name, value)
-            else:
-                raise RuntimeError(
-                    f"{self.__class__.__name__} mutated unsafely: "
-                    f"tried to modify {name}")
-        return prop
-
-    def __new__(cls, clsname: str, bases: tuple[type], attrs: dict):
-        for name, value in attrs.copy().items():
-            if not name.startswith('_') or value is not Mutable:
-                continue
-
-            attrs[name[1:]] = _UnsafeMutable._property(name)
-
-        return super().__new__(cls, clsname, bases, attrs)
-
-
-class UnsafeMutable(metaclass=_UnsafeMutable):
-    __currently_mutable: bool
-
-    def __init__(self) -> None:
-        self.__currently_mutable = False
-
-    @staticmethod
-    def mutator(func: Callable[['UnsafeMutable', *TArgs], T]) \
-            -> Callable[['UnsafeMutable', *TArgs], T]:
-        def wrapper(self: UnsafeMutable, *args: *TArgs, **kwargs) -> T:
-            if self.__currently_mutable:
-                return func(self, *args, **kwargs)
-            else:
-                raise RuntimeError(
-                    f"{self.__class__.__name__} mutated unsafely: "
-                    f"tried to use mutator {func.__name__}")
-        return wrapper
-
-    def __enter__(self) -> Self:
-        if self.__currently_mutable:
-            raise RuntimeError(f"{self} is already being mutated")
-        self.__currently_mutable = True
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback) -> bool:
-        self.__currently_mutable = False
-        return False

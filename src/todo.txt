@@ -1,6 +1,0 @@
-- evaluation
-- look-arounds & other special bracket groups
-- char classes
-- n-quantifiers
-- match, capture groups
-- string concatenation?

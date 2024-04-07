@@ -1,9 +1,10 @@
 import math
-from typing import Callable, Generic, TypeVar
+from typing import Callable, TypeVar
 
 # REFERENCE: https://www.geeksforgeeks.org/visualize-graphs-in-python/
 
 try:
+    import numpy as np
     import networkx
     from networkx import layout as nxlayout
     import matplotlib.pyplot
@@ -16,14 +17,10 @@ except ImportError:
     quit()
 import networkx_curved_label
 
-N = TypeVar("N")  # Node
-E = TypeVar("E")  # Edge
+T = TypeVar('T')
 
 
-class DebugGraphViewer(Generic[N, E]):
-    _auto_increment_id: int
-    _visited_nodes: dict[N, int]
-    _visited_edges: set[E]
+class DebugGraphViewer:
     _graph: networkx.MultiDiGraph
     _layout: dict[tuple[int, int], tuple[float, float]] | None
     _layout_planner: Callable
@@ -31,47 +28,30 @@ class DebugGraphViewer(Generic[N, E]):
 
     def __init__(
             self,
-            start: N,
-            end: N | None = None,
+            graph: np.ndarray[set[T]],
             layout=networkx.layout.kamada_kawai_layout):
-        self._auto_increment_id = 0
-        self._visited_nodes = {}
-        self._visited_edges = set()
         self._graph = networkx.MultiDiGraph()
         self._layout = None
         self._layout_planner = layout
         self._color_overrides = {}
-        self._color_overrides[self.explore_node(start)] = (1.0, 0.3, 0.3)
-        if end is not None:
-            self._color_overrides[self.explore_node(end)] = (0.3, 1.0, 0.3)
-
-    def explore_node(self, node: N, color=None) -> int:
-        while (hasattr(node, "_replaced_with")
-                and node._replaced_with is not None):
-            node = node._replaced_with
-        if node in self._visited_nodes:
-            return self._visited_nodes[node]
-        id = self._auto_increment_id
-        self._auto_increment_id += 1
-        self._visited_nodes[node] = id
-        self._graph.add_node(id, label=str(node))
-        if node is None:
-            # Exceptional case
-            self._color_overrides[id] = (1.0, 0.0, 0.0)
-        else:
-            for edge in node.next:
-                self.explore_edge(edge)
-            for edge in node.previous:
-                self.explore_edge(edge)
-        return id
-
-    def explore_edge(self, edge: E) -> None:
-        if edge in self._visited_edges:
-            return
-        self._visited_edges.add(edge)
-        start = self.explore_node(edge.previous)
-        end = self.explore_node(edge.next)
-        self._graph.add_edge(start, end, label=repr(edge))
+        self._color_overrides[0] = (1.0, 0.3, 0.3)
+        self._color_overrides[graph.shape[0] - 1] = (0.3, 1.0, 0.3)
+        # iterate graph
+        it = np.nditer(graph, flags=['multi_index', 'refs_ok'])
+        # if only python had a do: ... while() loop :(
+        while True:
+            start_state, end_state = it.multi_index
+            # add nodes
+            self._graph.add_node(start_state, label=str(start_state))
+            self._graph.add_node(end_state, label=str(end_state))
+            # add edge
+            edges = graph[it.multi_index]
+            if isinstance(edges, set):
+                for edge in edges:
+                    self._graph.add_edge(start_state, end_state,
+                                         label=str(edge))
+            if not it.iternext():
+                break
 
     def _display_edges(self,
                        edges: list[tuple[int, int, int, str]],
@@ -246,11 +226,11 @@ class MultiFigureViewer:
         matplotlib.pyplot.get_current_fig_manager().start_main_loop()
 
 
-def test_layouts_for(start: N, end: N | None = None):
+def test_layouts_for(graph: np.ndarray[set[T]]):
     view = MultiFigureViewer()
     for name in nxlayout.__all__:
         layout = getattr(nxlayout, name)
-        viewer = DebugGraphViewer(start, end, layout)
+        viewer = DebugGraphViewer(graph, layout)
         try:
             fig = viewer.render()
         except Exception:
@@ -258,52 +238,3 @@ def test_layouts_for(start: N, end: N | None = None):
         fig.canvas.manager.set_window_title(name)
         view.add(fig)
     view.display()
-
-if __name__ == "__main__":
-    class TestEdge:
-        name: str
-        previous: 'TestNode'
-        next: 'TestNode'
-
-        def __init__(self,
-                     prev: 'TestNode',
-                     next: 'TestNode',
-                     name: str):
-            self.previous = prev
-            self.next = next
-            self.name = name
-
-        def __repr__(self) -> str:
-            return self.name
-
-    class TestNode:
-        previous: set[TestEdge]
-        next: set[TestEdge]
-
-        def __init__(self):
-            self.previous = set()
-            self.next = set()
-
-        def connect(self, other: 'TestNode', label: str) -> 'TestEdge':
-            e = TestEdge(self, other, label)
-            self.next.add(e)
-            other.previous.add(e)
-
-    n1 = TestNode()
-    n2 = TestNode()
-    n3 = TestNode()
-    n4 = TestNode()
-    n5 = TestNode()
-    n1.connect(n2, "path1")
-    n2.connect(n2, "loop")
-    n2.connect(n2, "altloop")
-    n2.connect(n3, "continue")
-    n1.connect(n4, "path2")
-    n1.connect(n4, "path3")
-    n4.connect(n3, "continue")
-    n4.connect(n3, "continuealt")
-    n3.connect(n4, "reverse")
-    n3.connect(n5, "end")
-    n4.connect(n5, "end")
-    DebugGraphViewer(n1).render()
-    DebugGraphViewer.display()

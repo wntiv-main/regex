@@ -11,13 +11,6 @@
 			"program": "${workspaceFolder}/src/__main__.py",
 			"justMyCode": false,
 			"console": "integratedTerminal"
-		},
-		{
-			"name": "Python: Run DebugGraphViewer",
-			"type": "python",
-			"request": "launch",
-			"program": "${workspaceFolder}/src/debug_graph_viewer.py",
-			"console": "integratedTerminal"
 		}
 	]
 }
