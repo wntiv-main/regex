@@ -33,7 +33,6 @@ class _RegexFactory:
 
     _capture_auto_id: int
     _cursor_started: int
-    # _join_to_end: list[State]
 
     def __init__(self, pattern: str,
                  *, _cursor: int = 0,
@@ -49,7 +48,6 @@ class _RegexFactory:
 
         self._capture_auto_id = _cid
         self._cursor_started = _open_bracket_pos
-        # self._join_to_end = []
 
     def _append(self, connection: ParserPredicate | 'Regex') -> None:
         if isinstance(connection, ParserPredicate):
@@ -242,16 +240,7 @@ class _RegexFactory:
             case '}' | ']':
                 raise PatternParseError("Unopened bracket")
             case '|':  # or
-                # Two options:
-                # _start -> _end
-                # _end -> [end of parse]
-                # # Connect first option to end
-                # self._join_to_end.append(self._regex.end)
-                # # Start second option at _start,
-                # # continue parsing from there
-                # new_state = self._regex.append_state()
-                # self._regex.connect(self._regex.start, new_state,
-                #                     MatchConditions.epsilon_transition)
+                # TODO: is this safe?
                 # Parse RHS of expression
                 rh_builder = _RegexFactory(
                     self._pattern,
@@ -274,53 +263,26 @@ class Regex:
     # S_n = x where table[S_(n-1), x].any(x=>x(ctx) is True)
     transition_table: np.ndarray[set[ParserPredicate]]
 
-    def _expand(self, size):
-        old_size = self.size
-        new_size = self.size + size
-        # add vertical space
-        self.transition_table.resize((new_size, old_size), refcheck=False)
-        temp = self.transition_table.T.copy()
-        temp.resize((new_size, new_size), refcheck=False)
-        self.transition_table = temp.T.copy()
-
-    @property
-    def start(self) -> State:
-        return 0
-
-    @property
-    def end(self) -> State:
-        assert (len(self.transition_table.shape) == 2
-                and self.transition_table.shape[0]
-                == self.transition_table.shape[1])
-        return self.transition_table.shape[0] - 1
-
-    @property
-    def size(self) -> int:
-        assert (len(self.transition_table.shape) == 2
-                and self.transition_table.shape[0]
-                == self.transition_table.shape[1])
-        return self.transition_table.shape[0]
-
     @overload
     def __new__(cls, regex: str) -> Self:
         ...
 
     @overload
-    def __new__(cls, *, _privated) -> Self:
+    def __new__(cls, *, _privated: None) -> Self:
         ...
 
     @overload
     def __new__(
             cls,
             transition_table: np.ndarray[set[ParserPredicate]],
-            *, _privated) -> Self:
+            *, _privated: None) -> Self:
         ...
 
     @overload
     def __new__(
             cls,
             predicate: ParserPredicate,
-            *, _privated) -> Self:
+            *, _privated: None) -> Self:
         ...
 
     def __new__(cls, *args, **kwargs) -> Self:
@@ -341,6 +303,35 @@ class Regex:
             case _:
                 raise TypeError(f"Invalid args to {cls.__name__}()", args)
 
+    @property
+    def start(self) -> State:
+        return 0
+
+    @property
+    def end(self) -> State:
+        assert (len(self.transition_table.shape) == 2
+                and self.transition_table.shape[0]
+                == self.transition_table.shape[1])
+        return self.transition_table.shape[0] - 1
+
+    @property
+    def size(self) -> int:
+        assert (len(self.transition_table.shape) == 2
+                and self.transition_table.shape[0]
+                == self.transition_table.shape[1])
+        return self.transition_table.shape[0]
+    __len__ = size.fget
+
+    def _expand(self, size):
+        # TODO: more performant method??
+        old_size = self.size
+        new_size = self.size + size
+        # add vertical space
+        self.transition_table.resize((new_size, old_size), refcheck=False)
+        temp = self.transition_table.T.copy()
+        temp.resize((new_size, new_size), refcheck=False)
+        self.transition_table = temp.T.copy()
+
     def append_state(self) -> State:
         # Resize table to have new state at end
         self._expand(1)
@@ -354,7 +345,29 @@ class Regex:
             self.transition_table[start_state, end_state] = set()
         self.transition_table[start_state, end_state].add(connection)
 
+    def _epsilon_closure(self):
+        pass
+
+    def _minimisation(self):
+        for i in range(self.size):
+            pass
+
+    def _merge_outputs(self, s1_idx: State, s2_idx: State) -> None:
+        # Iterate s2 row and make same connections from s1
+        it = np.nditer(self.transition_table[s2_idx, :],
+                       flags=['c_index'])
+        for edge in it:
+            self.connect(s1_idx, it.index, edge)
+
+    def _merge_inputs(self, s1_idx: State, s2_idx: State) -> None:
+        # Iterate s2 column and make same connections to s1
+        it = np.nditer(self.transition_table[:, s2_idx],
+                       flags=['c_index'])
+        for edge in it:
+            self.connect(it.index, s1_idx, edge)
+
     def __iadd__(self, other: Any) -> Self:
+        # TODO: https://numpy.org/doc/stable/reference/generated/numpy.block.html#numpy.block
         if isinstance(other, Regex):
             other = other.copy()
             initial_end = self.end

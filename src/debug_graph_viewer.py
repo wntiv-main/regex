@@ -39,19 +39,16 @@ class DebugGraphViewer:
         # iterate graph
         it = np.nditer(graph, flags=['multi_index', 'refs_ok'])
         # if only python had a do: ... while() loop :(
-        while True:
+        for edges in it:
             start_state, end_state = it.multi_index
             # add nodes
             self._graph.add_node(start_state, label=str(start_state))
             self._graph.add_node(end_state, label=str(end_state))
             # add edge
-            edges = graph[it.multi_index]
             if isinstance(edges, set):
                 for edge in edges:
                     self._graph.add_edge(start_state, end_state,
                                          label=str(edge))
-            if not it.iternext():
-                break
 
     def _display_edges(self,
                        edges: list[tuple[int, int, int, str]],
