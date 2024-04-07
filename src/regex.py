@@ -39,7 +39,7 @@ class _RegexFactory:
                  _cid: int = 0,
                  _open_bracket_pos: int = 0) -> None:
         rx = Regex(_privated=None)
-        rx.transition_table = np.empty((1, 1), dtype=set)
+        rx.transition_table = Regex._empty_arr((1, 1))
         self._regex = rx
         self._pattern = pattern
         self._cur = _cursor
@@ -262,6 +262,8 @@ class _RegexFactory:
 class Regex:
     # S_n = x where table[S_(n-1), x].any(x=>x(ctx) is True)
     transition_table: np.ndarray[set[ParserPredicate]]
+    start: State
+    end: State
 
     @overload
     def __new__(cls, regex: str) -> Self:
@@ -274,8 +276,7 @@ class Regex:
     @overload
     def __new__(
             cls,
-            transition_table: np.ndarray[set[ParserPredicate]],
-            *, _privated: None) -> Self:
+            other: 'Regex') -> Self:
         ...
 
     @overload
@@ -291,28 +292,27 @@ class Regex:
                 return _RegexFactory(regex).build()
             case (ParserPredicate() as x,), {"_privated": _}:
                 result = super().__new__(cls)
-                result.transition_table = np.empty((2, 2), dtype=set)
-                result.connect(0, 1, x)
+                result.transition_table = Regex._empty_arr((2, 2))
+                result.start = 0
+                result.end = 1
+                result.connect(result.start, result.end, x)
                 return result
-            case (np.ndarray() as x,), {"_privated": _}:
+            case (Regex() as x,), {}:
                 result = super().__new__(cls)
-                result.transition_table = x
+                # Deep copy sets within table
+                result.transition_table = np.vectorize(
+                    Regex._inner_copy_set)(x.transition_table)
+                result.start = x.start
+                result.end = x.end
                 return result
             case (), {"_privated": _}:
-                return super().__new__(cls)
+                result = super().__new__(cls)
+                result.transition_table = Regex._empty_arr(1)
+                result.start = 0
+                result.end = 0
+                return result
             case _:
                 raise TypeError(f"Invalid args to {cls.__name__}()", args)
-
-    @property
-    def start(self) -> State:
-        return 0
-
-    @property
-    def end(self) -> State:
-        assert (len(self.transition_table.shape) == 2
-                and self.transition_table.shape[0]
-                == self.transition_table.shape[1])
-        return self.transition_table.shape[0] - 1
 
     @property
     def size(self) -> int:
@@ -324,22 +324,12 @@ class Regex:
 
     @staticmethod
     def _empty_arr(size: Sequence[int]):
-        return np.fromfunction(lambda *_: set(), size)
-
-    # def _expand(self, size):
-    #     # TODO: more performant method??
-    #     old_size = self.size
-    #     new_size = self.size + size
-    #     # add vertical space
-    #     self.transition_table.resize((new_size, old_size), refcheck=False)
-    #     temp = self.transition_table.T.copy()
-    #     temp.resize((new_size, new_size), refcheck=False)
-    #     self.transition_table = temp.T.copy()
+        return np.fromfunction(lambda *_: set(), size, dtype=set)
 
     def append_state(self) -> State:
         # Resize table to have new state at end
         self._diagonal_block_with(Regex._empty_arr((1, 1)))
-        return self.end
+        return self.size - 1
 
     def connect(self,
                 start_state: State,
@@ -358,7 +348,14 @@ class Regex:
         self.transition_table[start_state, end_state] |= connections
 
     def _epsilon_closure(self):
-        pass
+        for i in range(self.size):
+            for j in range(self.size):
+                # TODO: soon edges will have more info
+                if (MatchConditions.epsilon_transition
+                        in self.transition_table[i, j]):
+                    self._merge_outputs(i, j)
+                    self.transition_table[i, j].remove(
+                        MatchConditions.epsilon_transition)
 
     def _minimisation(self):
         to_remove: set[State] = set()
@@ -410,31 +407,31 @@ class Regex:
     def __iadd__(self, other: Any) -> Self:
         if isinstance(other, Regex):
             other = other.copy()
-            initial_end = self.end
             offset = self.size
             self._diagonal_block_with(other.transition_table)
             # Connect our end to their start
-            self.connect(initial_end, offset + other.start,
+            self.connect(self.end, offset + other.start,
                          MatchConditions.epsilon_transition)
+            self.end = offset + other.end
         elif isinstance(other, ParserPredicate):
-            old_end = self.end
             new_state = self.append_state()
-            self.connect(old_end, new_state, other)
+            self.connect(self.end, new_state, other)
+            self.end = new_state
         else:
             raise NotImplementedError()
         return self
 
     def __ior__(self, other: 'Regex') -> Self:
         other = other.copy()
-        initial_end = self.end
         offset = self.size
         self._diagonal_block_with(other.transition_table)
         # Connect our start to their start
         self.connect(self.start, offset + other.start,
                      MatchConditions.epsilon_transition)
         # Connect our end to their end
-        self.connect(initial_end, offset + other.end,
+        self.connect(self.end, offset + other.end,
                      MatchConditions.epsilon_transition)
+        self.end = offset + other.end
         return self
 
     def optional(self) -> Self:
@@ -454,14 +451,12 @@ class Regex:
         return None
 
     def copy(self):
-        # deep copy set objs
-        new_tx = np.vectorize(Regex._inner_copy_set)(self.transition_table)
-        return Regex(new_tx, _privated=None)
+        return Regex(self)
 
     def __str__(self) -> str:
-        return "[%s]" % ',\n '.join([
+        return "[%s]: %d -> %d" % ',\n '.join([
             "[%s]" % ', '.join([
                 f"{{{', '.join([str(edge) for edge in edges])}}}"
                 if isinstance(edges, set) else "{}"
                 for edges in row])
-            for row in self.transition_table])
+            for row in self.transition_table]), self.start, self.end
