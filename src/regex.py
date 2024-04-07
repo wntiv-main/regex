@@ -52,7 +52,7 @@ class _RegexFactory:
     def _append(self, connection: 'ParserPredicate | Regex') -> None:
         if isinstance(connection, ParserPredicate):
             connection = Regex(connection, _privated=None)
-        self._regex += self._last_token
+        self._regex += self._last_token # TODO: FIX
         self._last_token = connection
 
     def _consume_char(self) -> str:
