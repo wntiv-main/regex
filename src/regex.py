@@ -29,7 +29,7 @@ class _RegexFactory:
     _regex: 'Regex'
     _pattern: str
     _cur: int
-    _last_token: State
+    _last_token: 'Regex'
 
     _capture_auto_id: int
     _cursor_started: int
@@ -45,11 +45,17 @@ class _RegexFactory:
         self._pattern = pattern
         self._cur = _cursor
         # Should error if accessed before assigned
-        # self._last_token = 0
+        self._last_token = None
 
         self._capture_auto_id = _cid
         self._cursor_started = _open_bracket_pos
         # self._join_to_end = []
+
+    def _append(self, connection: ParserPredicate | 'Regex') -> None:
+        if isinstance(connection, ParserPredicate):
+            connection = Regex(connection, _privated=None)
+        self._regex += self._last_token
+        self._last_token = connection
 
     def _consume_char(self) -> str:
         ch = self._pattern[self._cur]
@@ -147,11 +153,9 @@ class _RegexFactory:
             case ch if ch in _parser_symbols_escaped:
                 # if ch == 'A':
                 #     self._anchored = True
-                self._last_token = self._regex.end
-                self._regex += _parser_symbols_escaped[ch]
+                self._append(_parser_symbols_escaped[ch])
             case (ch, _) if ch in "\\.^$+*?[]{}()":
-                self._last_token = self._regex.end
-                self._regex += ConsumeString(ch)
+                self._append(ConsumeString(ch))
             case _:
                 bk = '\\'  # dumb python
                 raise PatternParseError(
@@ -165,31 +169,20 @@ class _RegexFactory:
         match char:
             # ^, $, ., etc...
             case ch if ch in _parser_symbols:
-                self._last_token = self._regex.end
-                self._regex += _parser_symbols[ch]
+                self._append(_parser_symbols[ch])
             case '?':  # Make _last_token optional
-                self._regex.connect(self._last_token, self._regex.end,
-                                    MatchConditions.epsilon_transition)
+                self._last_token = self._last_token.optional()
             case '+':  # Repeat 1+ times quantifier
-                self._regex.connect(self._regex.end, self._last_token,
-                                    MatchConditions.epsilon_transition)
+                self._last_token = self._last_token.repeated()
                 # sandbox to prevend out-of-order-ing sequenced loops
                 # TODO: is this neccesary??
                 # i think it is now
-                self._last_token = self._regex.end
-                self._regex += MatchConditions.epsilon_transition
+                # here again, thinking it still is
+                self._append(MatchConditions.epsilon_transition)
             case '*':  # Repeat 0+ times quantifier
-                # Optional
-                self._regex.connect(self._last_token, self._regex.end,
-                                    MatchConditions.epsilon_transition)
-                # Repeating
-                self._regex.connect(self._regex.end, self._last_token,
-                                    MatchConditions.epsilon_transition)
-                # sandbox to prevend out-of-order-ing sequenced loops
-                # TODO: is this neccesary??
-                # i think it is now
-                self._last_token = self._regex.end
-                self._regex += MatchConditions.epsilon_transition
+                self._last_token = self._last_token.optional().repeated()
+                # see above
+                self._append(MatchConditions.epsilon_transition)
             case '[':  # Character class specifiers
                 negated = self._try_consume('^')
                 cls_specifier = self._consume_till_next(
@@ -197,11 +190,14 @@ class _RegexFactory:
                 chars = SignedSet(
                     self._chars_from_char_class(cls_specifier),
                     negate=negated)
-                self._last_token = self._regex.end
-                self._regex += ConsumeAny(chars)
+                self._append(ConsumeAny(chars))
             case '{':  # n-quantifier
                 quantity = self._consume_till_next('}', self._is_unescaped)
                 # TODO: handle ;)
+                # idea:
+                # for i in range(...):
+                #     self._append(self._last_token)
+                # idea 2: __mul__  or __imul__
                 raise NotImplementedError()
             case '(':  # group
                 start_pos = self._cur - 1
@@ -231,10 +227,8 @@ class _RegexFactory:
                 self._capture_auto_id = inner_builder._capture_auto_id
                 # TODO: capture groups
                 # epsilon moves sandbox group and prevent loops escaping
-                self._last_token = self._regex.end
-                self._regex += MatchConditions.epsilon_transition
-                self._regex += inner_group
-                self._regex += MatchConditions.epsilon_transition
+                inner_group += MatchConditions.epsilon_transition
+                self._append(inner_group)
                 if nested:
                     # Ensure that we still also have closing bracket
                     _ = self._find_next(')', self._is_unescaped,
@@ -272,7 +266,7 @@ class _RegexFactory:
             # All other chars:
             case ch:
                 self._last_token = self._regex.end
-                self._regex += ConsumeString(ch)
+                self._append(ConsumeString(ch))
         return False
 
 
