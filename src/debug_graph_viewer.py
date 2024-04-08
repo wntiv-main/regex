@@ -45,8 +45,8 @@ class DebugGraphViewer:
             self._graph.add_node(start_state, label=str(start_state))
             self._graph.add_node(end_state, label=str(end_state))
             # add edge
-            if isinstance(edges, set):
-                for edge in edges:
+            if isinstance(edges[()], set):
+                for edge in edges[()]:
                     self._graph.add_edge(start_state, end_state,
                                          label=str(edge))
 
