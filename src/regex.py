@@ -143,6 +143,9 @@ class _RegexFactory:
         while self._cur < len(self._pattern):
             if self._parse_char(self._consume_char(), _nested):
                 break
+        self._regex += self._last_token
+        # if not _nested:
+        #     self._regex._epsilon_closure()
         return self._regex
 
     def _parse_escaped(self, char: str) -> None:
@@ -381,14 +384,14 @@ class Regex:
     def _merge_outputs(self, s1_idx: State, s2_idx: State) -> None:
         # Iterate s2 row and make same connections from s1
         it = np.nditer(self.transition_table[s2_idx, :],
-                       flags=['c_index'])
+                       flags=['c_index', 'refs_ok'])
         for edges in it:
             self.connect_many(s1_idx, it.index, edges)
 
     def _merge_inputs(self, s1_idx: State, s2_idx: State) -> None:
         # Iterate s2 column and make same connections to s1
         it = np.nditer(self.transition_table[:, s2_idx],
-                       flags=['c_index'])
+                       flags=['c_index', 'refs_ok'])
         for edges in it:
             self.connect_many(it.index, s1_idx, edges)
 
