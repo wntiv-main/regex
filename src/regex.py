@@ -29,7 +29,7 @@ class _RegexFactory:
     _regex: 'Regex'
     _pattern: str
     _cur: int
-    _last_token: 'Regex'
+    _last_token: 'Regex | None'
 
     _capture_auto_id: int
     _cursor_started: int
@@ -52,7 +52,8 @@ class _RegexFactory:
     def _append(self, connection: 'ParserPredicate | Regex') -> None:
         if isinstance(connection, ParserPredicate):
             connection = Regex(connection, _privated=None)
-        self._regex += self._last_token # TODO: FIX
+        if self._last_token is not None:
+            self._regex += self._last_token
         self._last_token = connection
 
     def _consume_char(self) -> str:
@@ -254,7 +255,6 @@ class _RegexFactory:
                 return True
             # All other chars:
             case ch:
-                self._last_token = self._regex.end
                 self._append(ConsumeString(ch))
         return False
 
@@ -400,10 +400,10 @@ class Regex:
         # constructs block matrix like:
         # [[self,  empty]
         #  [empty, other]]
-        self.transition_table = np.block((
-            (self.transition_table, Regex._empty_arr((self.size,
-                                                      other.shape[1]))),
-            (Regex._empty_arr((other.shape[0], self.size)), other)))
+        self.transition_table = np.block([
+            [self.transition_table, Regex._empty_arr((self.size,
+                                                      other.shape[1]))],
+            [Regex._empty_arr((other.shape[0], self.size)), other]])
 
     def __iadd__(self, other: Any) -> Self:
         if isinstance(other, Regex):
@@ -455,9 +455,9 @@ class Regex:
         return Regex(self)
 
     def __str__(self) -> str:
-        return "[%s]: %d -> %d" % ',\n '.join([
+        return "[%s]: %d -> %d" % (',\n '.join([
             "[%s]" % ', '.join([
                 f"{{{', '.join([str(edge) for edge in edges])}}}"
                 if isinstance(edges, set) else "{}"
                 for edges in row])
-            for row in self.transition_table]), self.start, self.end
+            for row in self.transition_table]), self.start, self.end)
