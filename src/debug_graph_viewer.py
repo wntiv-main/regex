@@ -29,13 +29,15 @@ class DebugGraphViewer:
     def __init__(
             self,
             graph: np.ndarray[set[T]],
+            start_idx: int,
+            end_idx: int,
             layout=networkx.layout.kamada_kawai_layout):
         self._graph = networkx.MultiDiGraph()
         self._layout = None
         self._layout_planner = layout
         self._color_overrides = {}
-        self._color_overrides[0] = (1.0, 0.3, 0.3)
-        self._color_overrides[graph.shape[0] - 1] = (0.3, 1.0, 0.3)
+        self._color_overrides[start_idx] = (1.0, 0.3, 0.3)
+        self._color_overrides[end_idx] = (0.3, 1.0, 0.3)
         # iterate graph
         it = np.nditer(graph, flags=['multi_index', 'refs_ok'])
         # if only python had a do: ... while() loop :(
@@ -223,11 +225,13 @@ class MultiFigureViewer:
         matplotlib.pyplot.get_current_fig_manager().start_main_loop()
 
 
-def test_layouts_for(graph: np.ndarray[set[T]]):
+def test_layouts_for(graph: np.ndarray[set[T]],
+                     start_idx: int,
+                     end_idx: int):
     view = MultiFigureViewer()
     for name in nxlayout.__all__:
         layout = getattr(nxlayout, name)
-        viewer = DebugGraphViewer(graph, layout)
+        viewer = DebugGraphViewer(graph, start_idx, end_idx, layout)
         try:
             fig = viewer.render()
         except Exception:

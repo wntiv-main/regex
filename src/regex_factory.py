@@ -138,8 +138,10 @@ class _RegexFactory:
             if self._parse_char(self._consume_char(), _nested):
                 break
         self._regex += self._last_token
-        # if not _nested:
-        #     self._regex._epsilon_closure()
+        if not _nested:
+            self._regex._epsilon_closure()
+            self._regex._epsilon_closure()
+            self._regex._epsilon_closure()
         return self._regex
 
     def _parse_escaped(self, char: str) -> None:

@@ -1,7 +1,7 @@
 __all__ = ["Regex"]
 __author__ = "Callum Hynes"
 
-from typing import Any, Self, Sequence, TypeAlias, overload
+from typing import Any, Callable, Self, Sequence, TypeAlias, overload
 import numpy as np
 
 from regex_factory import _RegexFactory
@@ -10,6 +10,12 @@ from regexutil import MatchConditions, ParserPredicate
 State: TypeAlias = int
 
 class Regex:
+    # Function for debugging
+    _debug_function: Callable[['Regex', str], None] = lambda *_: None
+
+    def _debug(self, msg: str):
+        Regex._debug_function(self, msg)
+
     # S_n = x where table[S_(n-1), x].any(x=>x(ctx) is True)
     transition_table: np.ndarray[set[ParserPredicate]]
     start: State
@@ -98,15 +104,42 @@ class Regex:
             self.transition_table[start_state, end_state] = set()
         self.transition_table[start_state, end_state] |= connections
 
+    def _can_minify(self, s1: State, s2: State) -> bool:
+        if s1 == s2:
+            return False
+        for i in range(self.size):
+            if i == s1 or i == s2:
+                diff = (self.transition_table[s1, i]
+                        ^ self.transition_table[s2, i])
+                for edge in diff:
+                    if edge != MatchConditions.epsilon_transition:
+                        return False
+            elif (self.transition_table[s1, i]
+                  != self.transition_table[s2, i]):
+                return False
+        return True
+
     def _epsilon_closure(self):
+        to_remove: set[State] = set()
         for i in range(self.size):
             for j in range(self.size):
+                if i in to_remove or j in to_remove:
+                    continue
                 # TODO: soon edges will have more info
                 if (MatchConditions.epsilon_transition
-                        in self.transition_table[i, j]):
+                        in self.transition_table[i, j]
+                        and j != self.end):
                     self._merge_outputs(i, j)
                     self.transition_table[i, j].remove(
                         MatchConditions.epsilon_transition)
+                    self._debug(f"e-closed {i} -> {j}")
+                # minimisation
+                if self._can_minify(i, j):
+                    self._merge(i, j)
+                    to_remove.add(j)
+        # Remove in reverse to avoid deletions mis-ordering the matrix
+        for state in sorted(to_remove, reverse=True):
+            self._remove_state(state)
 
     def _minimisation(self):
         to_remove: set[State] = set()
@@ -121,6 +154,10 @@ class Regex:
             self._remove_state(state)
 
     def _remove_state(self, state: State) -> None:
+        if self.start > state:
+            self.start -= 1
+        if self.end > state:
+            self.end -= 1
         # remove both row and column for `state`
         self.transition_table = np.delete(
             np.delete(

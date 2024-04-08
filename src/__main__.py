@@ -13,9 +13,21 @@ def main():
     #     r"(?:def|function|(?P<rtype>\w+))\s*(?P<fname>\w+)\s*" \
     #     r"\((?:(?P<argtype>\w+)\s*(?P<argname>\w+))*\)\s*" \
     #     r"(?:=>\s*(?P<rtype>\w+))?").build()
+    mfv = MultiFigureViewer()
+
+    def debug(rx: Regex, msg: str):
+        fig = DebugGraphViewer(rx.transition_table,
+                               rx.start, rx.end).render()
+        fig.suptitle(str(rx), fontsize=8)
+        fig.canvas.manager.set_window_title(msg)
+        mfv.add(fig)
+    Regex._debug_function = debug
+
     rx = Regex(r"(?:a?b?c?)*")
     print(rx)
-    test_layouts_for(rx.transition_table)
+    mfv.add(DebugGraphViewer(rx.transition_table,
+                             rx.start, rx.end).render())
+    mfv.display()
 
 
 if __name__ == "__main__":
