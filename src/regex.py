@@ -1,4 +1,4 @@
-__all__ = ["Regex"]
+__all__ = ["Regex", "State"]
 __author__ = "Callum Hynes"
 
 from typing import Any, Callable, Self, Sequence, TypeAlias, overload
@@ -11,10 +11,11 @@ State: TypeAlias = int
 
 class Regex:
     # Function for debugging
-    _debug_function: Callable[['Regex', str], None] = lambda *_: None
+    _debug_function: Callable[['Regex', str, set[State]], None]\
+        = lambda *_: None
 
-    def _debug(self, msg: str):
-        Regex._debug_function(self, msg)
+    def _debug(self, msg: str, removable: set[State]):
+        Regex._debug_function(self, msg, removable)
 
     # S_n = x where table[S_(n-1), x].any(x=>x(ctx) is True)
     transition_table: np.ndarray[set[ParserPredicate]]
@@ -127,16 +128,24 @@ class Regex:
                     continue
                 # TODO: soon edges will have more info
                 if (MatchConditions.epsilon_transition
-                        in self.transition_table[i, j]
-                        and j != self.end):
+                        in self.transition_table[i, j]):
+                    if j == self.end and i != self.end:
+                        self.end = i
+                        self.connect(j, i,
+                                     MatchConditions.epsilon_transition)
                     self._merge_outputs(i, j)
                     self.transition_table[i, j].remove(
                         MatchConditions.epsilon_transition)
-                    self._debug(f"e-closed {i} -> {j}")
+                    self._debug(f"e-closed {i} -> {j}", to_remove)
                 # minimisation
                 if self._can_minify(i, j):
                     self._merge(i, j)
                     to_remove.add(j)
+                    if j == self.start:
+                        self.start = i
+                    if j == self.end:
+                        self.end = i
+                    self._debug(f"merged {j} -> {i}", to_remove)
         # Remove in reverse to avoid deletions mis-ordering the matrix
         for state in sorted(to_remove, reverse=True):
             self._remove_state(state)
