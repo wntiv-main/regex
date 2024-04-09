@@ -174,9 +174,9 @@ class Regex:
         row_set = self.transition_table[state, out1]
         column_set = self.transition_table[state, out2]
         row_coverage = SignedSet.union(
-            map(ParserPredicate.coverage, row_set))
+            *map(lambda x: x.coverage(), row_set))
         column_coverage = SignedSet.union(
-            map(ParserPredicate.coverage, column_set))
+            *map(lambda x: x.coverage(), column_set))
         if row_coverage & column_coverage:
             # Overlap, need powerset
             pass
