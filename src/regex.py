@@ -181,6 +181,8 @@ class Regex:
             # Overlap, need powerset
             pass
             # TODO: complete
+            # - Remove intersection from both initial states
+            # - Add new state containing the intersection
 
 
     def _remove_state(self, state: State) -> None:
