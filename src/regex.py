@@ -1,11 +1,12 @@
 __all__ = ["Regex", "State"]
 __author__ = "Callum Hynes"
 
+from functools import reduce
 from typing import Any, Callable, Self, Sequence, TypeAlias, overload
 import numpy as np
 
 from regex_factory import _RegexFactory
-from regexutil import MatchConditions, ParserPredicate
+from regexutil import MatchConditions, ParserPredicate, SignedSet
 
 State: TypeAlias = int
 
@@ -120,7 +121,7 @@ class Regex:
                 return False
         return True
 
-    def _epsilon_closure(self):
+    def _optimise(self):
         to_remove: set[State] = set()
         for i in range(self.size):
             for j in range(self.size):
@@ -146,21 +147,41 @@ class Regex:
                     if j == self.end:
                         self.end = i
                     self._debug(f"merged {j} -> {i}", to_remove)
+            # > Powerset construction <
+            # While loop as expect size to change
+            # Iterate lower half of triangle:
+            #   0 1 2 3
+            # 0 \
+            # 1 * \
+            # 2 * * \
+            # 3 * * * \
+            # This means that any states added during the iteration will
+            # still be covered entirely
+            j = 1
+            while j < self.size:
+                k = 0
+                while k < j:
+                    self._powerset_construction(i, j, k)
+                    k += 1
+                j += 1
         # Remove in reverse to avoid deletions mis-ordering the matrix
         for state in sorted(to_remove, reverse=True):
             self._remove_state(state)
 
-    def _minimisation(self):
-        to_remove: set[State] = set()
-        for i in range(self.size - 1):
-            for j in range(i + 1, self.size):
-                # TODO: more robust comparison
-                if self.transition_table[i] == self.transition_table[j]:
-                    self._merge(i, j)
-                    to_remove.add(j)
-        # Remove in reverse to avoid deletions mis-ordering the matrix
-        for state in sorted(to_remove, reverse=True):
-            self._remove_state(state)
+    def _powerset_construction(self, state: State,
+                               out1: State, out2: State):
+        # Check if sets have any overlap
+        row_set = self.transition_table[state, out1]
+        column_set = self.transition_table[state, out2]
+        row_coverage = SignedSet.union(
+            map(ParserPredicate.coverage, row_set))
+        column_coverage = SignedSet.union(
+            map(ParserPredicate.coverage, column_set))
+        if row_coverage & column_coverage:
+            # Overlap, need powerset
+            pass
+            # TODO: complete
+
 
     def _remove_state(self, state: State) -> None:
         if self.start > state:

@@ -47,6 +47,32 @@ class SignedSet(Generic[T]):
     def __contains__(self, value: T):
         return (self._negate ^ (value in self._accept))
 
+    @overload
+    @staticmethod
+    def union(*sets: 'SignedSet'):
+        ...
+
+    @overload
+    def union(self, *others: 'SignedSet'):
+        ...
+
+    def union(*sets: 'SignedSet'):
+        result = SignedSet()
+        for el in sets:
+            match result._negate, el._negate:
+                case False, False:
+                    result._accept |= el._accept
+                case True, True:
+                    result._accept &= el._accept
+                case False, True:
+                    result._negate = True
+                    result._accept = el._accept - result._accept
+                case True, False:
+                    result._accept -= el._accept
+        return result
+    __or__ = union
+
+    # TODO: housekeeeping: make the following more like union??
     def intersection(self, other: 'SignedSet') -> 'SignedSet':
         match self._negate, other._negate:
             case False, False:
