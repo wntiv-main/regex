@@ -188,7 +188,6 @@ class Regex:
             for edge in row_set | column_set:
                 match edge:
                     case ConsumeAny():
-                        # TODO: implement __isub__
                         edge.match_set -= intersection
                         if not edge.match_set:
                             to_remove.add(edge)

@@ -49,51 +49,80 @@ class SignedSet(Generic[T]):
 
     @overload
     @staticmethod
-    def union(*sets: 'SignedSet'):
+    def union(*sets: 'SignedSet') -> 'SignedSet':
         ...
 
     @overload
-    def union(self, *others: 'SignedSet'):
+    def union(self, *others: 'SignedSet') -> 'SignedSet':
         ...
 
-    def union(*sets: 'SignedSet'):
-        result = SignedSet()
-        for el in sets:
-            match result._negate, el._negate:
-                case False, False:
-                    result._accept |= el._accept
-                case True, True:
-                    result._accept &= el._accept
-                case False, True:
-                    result._negate = True
-                    result._accept = el._accept - result._accept
-                case True, False:
-                    result._accept -= el._accept
-        return result
+    def union(*sets):
+        return SignedSet().i_union(*sets)
     __or__ = union
 
+    def i_union(self, *sets: 'SignedSet') -> Self:
+        for el in sets:
+            match self._negate, el._negate:
+                case False, False:
+                    self._accept |= el._accept
+                case True, True:
+                    self._accept &= el._accept
+                case False, True:
+                    self._negate = True
+                    self._accept = el._accept - self._accept
+                case True, False:
+                    self._accept -= el._accept
+        return self
+    __ior__ = i_union
+
     # TODO: housekeeeping: make the following more like union??
-    def intersection(self, other: 'SignedSet') -> 'SignedSet':
-        match self._negate, other._negate:
-            case False, False:
-                return SignedSet(self._accept & other._accept)
-            case True, True:
-                return SignedSet(self._accept | other._accept, True)
-            case False, True:
-                return SignedSet(self._accept - other._accept)
-            case True, False:
-                return SignedSet(other._accept - self._accept)
+    @overload
+    @staticmethod
+    def intersection(*sets: 'SignedSet') -> 'SignedSet':
+        ...
+
+    @overload
+    def intersection(self, *others: 'SignedSet') -> 'SignedSet':
+        ...
+
+    def intersection(*sets):
+        return SignedSet().i_intersection(*sets)
     __and__ = intersection
+
+    def i_intersection(self, *sets: 'SignedSet') -> Self:
+        for el in sets:
+            match self._negate, el._negate:
+                case False, False:
+                    self._accept &= el._accept
+                case True, True:
+                    self._accept |= el._accept
+                case False, True:
+                    self._accept -= el._accept
+                case True, False:
+                    self._negate = False
+                    self._accept = el._accept - self._accept
+    __iand__ = i_intersection
 
     def symmetric_difference(self, other: 'SignedSet') -> 'SignedSet':
         match self._negate, other._negate:
-            case False, False:
-                return SignedSet(self._accept ^ other._accept)
-            case True, True:
+            case (False, False) | (True, True):
                 return SignedSet(self._accept ^ other._accept)
             case (False, True) | (True, False):
                 return SignedSet(self._accept ^ other._accept, True)
     __xor__ = symmetric_difference
+
+    def i_symmetric_difference(self, other: 'SignedSet') -> 'SignedSet':
+        match self._negate, other._negate:
+            case False, False:
+                self._accept ^= other._accept
+                return SignedSet(self._accept ^ other._accept)
+            case True, True:
+                self._negate = False
+                self._accept ^= other._accept
+            case (False, True) | (True, False):
+                self._negate = True
+                self._accept ^= other._accept
+    __ixor__ = i_symmetric_difference
 
     def difference(self, other: 'SignedSet') -> 'SignedSet':
         match self._negate, other._negate:
@@ -106,6 +135,19 @@ class SignedSet(Generic[T]):
             case True, False:
                 return SignedSet(self._accept | other._accept, True)
     __sub__ = difference
+
+    def i_difference(self, other: 'SignedSet') -> 'SignedSet':
+        match self._negate, other._negate:
+            case False, False:
+                self._accept -= other._accept
+            case True, True:
+                self._negate = False
+                self._accept = other._accept - self._accept
+            case False, True:
+                self._accept &= other._accept
+            case True, False:
+                self._accept |= other._accept
+    __isub__ = i_difference
 
     def __hash__(self) -> int:
         return _hash_set(self._accept) ^ (self._negate * ~0)
@@ -129,6 +171,9 @@ class SignedSet(Generic[T]):
     def unwrap_value(self) -> T:
         assert self.length() == 1
         return self._accept.copy().pop()
+
+    def copy(self) -> 'SignedSet':
+        return SignedSet(self._accept.copy(), self._negate)
 
     def __str__(self):
         return f"{'-' if self._negate else ''}{self._accept}"
