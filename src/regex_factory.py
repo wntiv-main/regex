@@ -142,6 +142,9 @@ class _RegexFactory:
             self._regex._optimise()
             self._regex._optimise()
             self._regex._optimise()
+            self._regex._optimise()
+            self._regex._optimise()
+            self._regex._optimise()
         return self._regex
 
     def _parse_escaped(self, char: str) -> None:

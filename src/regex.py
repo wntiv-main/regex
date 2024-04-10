@@ -6,7 +6,7 @@ from typing import Any, Callable, Self, Sequence, TypeAlias, overload
 import numpy as np
 
 from regex_factory import _RegexFactory
-from regexutil import MatchConditions, ParserPredicate, SignedSet
+from regexutil import ConsumeAny, ConsumeString, MatchConditions, ParserPredicate, SignedSet
 
 State: TypeAlias = int
 
@@ -177,11 +177,27 @@ class Regex:
             *map(lambda x: x.coverage(), row_set))
         column_coverage = SignedSet.union(
             *map(lambda x: x.coverage(), column_set))
-        if row_coverage & column_coverage:
+        intersection = row_coverage & column_coverage
+        if intersection:
             # Overlap, need powerset
-            pass
+            # Remove intersection from both initial states
+            to_remove: set[ParserPredicate] = set()
+            for edge in row_set | column_set:
+                match edge:
+                    case ConsumeAny():
+                        # TODO: implement __isub__
+                        edge.match_set -= intersection
+                        if not edge.match_set:
+                            to_remove.add(edge)
+                    case ConsumeString():
+                        if edge.match_string in intersection:
+                            to_remove.add(edge)
+                    case _:
+                        raise NotImplementedError()
+            for edge in to_remove:
+                row_set.discard(edge)
+                column_set.discard(edge)
             # TODO: complete
-            # - Remove intersection from both initial states
             # - Add new state containing the intersection
 
 
