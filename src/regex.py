@@ -2,7 +2,7 @@ __all__ = ["Regex", "State"]
 __author__ = "Callum Hynes"
 
 from functools import reduce
-from typing import Any, Callable, Self, Sequence, TypeAlias, overload
+from typing import Any, Callable, Optional, Self, Sequence, TypeAlias, overload
 import numpy as np
 
 from regex_factory import _RegexFactory
@@ -12,11 +12,11 @@ State: TypeAlias = int
 
 class Regex:
     # Function for debugging
-    _debug_function: Callable[['Regex', str, set[State]], None]\
+    _debug_function: Callable[['Regex', str], None]\
         = lambda *_: None
 
-    def _debug(self, msg: str, removable: set[State]):
-        Regex._debug_function(self, msg, removable)
+    def _debug(self, msg: str):
+        Regex._debug_function(self, msg)
 
     # S_n = x where table[S_(n-1), x].any(x=>x(ctx) is True)
     transition_table: np.ndarray[set[ParserPredicate]]
@@ -85,7 +85,7 @@ class Regex:
         # if only np.fromfunction() worked :(
         return np.vectorize(lambda _: set())(np.empty(size, dtype=set))
 
-    def append_state(self) -> State:
+    def add_state(self) -> State:
         # Resize table to have new state at end
         self._diagonal_block_with(Regex._empty_arr((1, 1)))
         return self.size - 1
@@ -122,14 +122,24 @@ class Regex:
         return True
 
     def _optimise(self):
-        to_remove: set[State] = set()
         # Use task queue to allow reiteration if a state is "dirtied"
         todo: list[State] = list(range(self.size))
         while todo:
-            i = todo.pop()
-            for j in range(self.size):
-                if i in to_remove or j in to_remove:
-                    continue
+            print(self)
+            i = todo.pop(0)
+            # Remove redundant states
+            if (not self.transition_table[:, i].any()
+                    and not i == self.start):
+                self._remove_state(i)
+                # Fix indices in list
+                for j in range(len(todo)):
+                    if todo[j] > i:
+                        todo[j] -= 1
+                print(f"removed {i}, to go {todo}")
+                continue
+            # Iterate states inner loop
+            j = 0
+            while j < self.size:
                 # TODO: soon edges will have more info
                 if (MatchConditions.epsilon_transition
                         in self.transition_table[i, j]):
@@ -137,19 +147,33 @@ class Regex:
                         self.end = i
                         self.connect(j, i,
                                      MatchConditions.epsilon_transition)
+                        todo.append(j)
                     self._merge_outputs(i, j)
                     self.transition_table[i, j].remove(
                         MatchConditions.epsilon_transition)
-                    self._debug(f"e-closed {i} -> {j}", to_remove)
+                    todo.append(i)
+                    self._debug(f"e-closed {i} -> {j}")
                 # minimisation
                 if self._can_minify(i, j):
                     self._merge(i, j)
-                    to_remove.add(j)
                     if j == self.start:
                         self.start = i
                     if j == self.end:
                         self.end = i
-                    self._debug(f"merged {j} -> {i}", to_remove)
+                    self._remove_state(j)
+                    # State removed, handle shifted indices
+                    # Reverse order, removing elements during iteration
+                    for k in range(len(todo) - 1, -1, -1):
+                        if todo[k] == j:
+                            todo.pop(k)
+                        elif todo[k] > j:
+                            todo[k] -= 1
+                    print(f"removed {j}, to go {todo}")
+                    if i > j:
+                        i -= 1
+                    j -= 1
+                    self._debug(f"merged {j} -> {i}")
+                j += 1
             # > Powerset construction <
             # While loop as expect size to change
             # Iterate lower half of triangle:
@@ -164,15 +188,13 @@ class Regex:
             while j < self.size:
                 k = 0
                 while k < j:
-                    self._powerset_construction(i, j, k)
+                    self._powerset_construction(todo, i, j, k)
                     k += 1
                 j += 1
-        # Remove in reverse to avoid deletions mis-ordering the matrix
-        for state in sorted(to_remove, reverse=True):
-            self._remove_state(state)
 
-    def _powerset_construction(self, state: State,
-                               out1: State, out2: State):
+    def _powerset_construction(
+            self, todo: list[State], state: State,
+            out1: State, out2: State):
         # Check if sets have any overlap
         row_set = self.transition_table[state, out1]
         column_set = self.transition_table[state, out2]
@@ -181,27 +203,38 @@ class Regex:
         column_coverage = SignedSet.union(
             *map(lambda x: x.coverage(), column_set))
         intersection = row_coverage & column_coverage
-        if intersection:
-            # Overlap, need powerset
-            # Remove intersection from both initial states
-            to_remove: set[ParserPredicate] = set()
-            for edge in row_set | column_set:
-                match edge:
-                    case ConsumeAny():
-                        edge.match_set -= intersection
-                        if not edge.match_set:
-                            to_remove.add(edge)
-                    case ConsumeString():
-                        if edge.match_string in intersection:
-                            to_remove.add(edge)
-                    case _:
-                        raise NotImplementedError()
-            for edge in to_remove:
-                row_set.discard(edge)
-                column_set.discard(edge)
-            # TODO: complete
-            # - Add new state containing the intersection
-
+        if not intersection:
+            return  # No overlap, exit early
+        # Overlap, need powerset
+        # Remove intersection from both initial states
+        to_remove: set[ParserPredicate] = set()
+        for edge in row_set | column_set:
+            match edge:
+                case ConsumeAny():
+                    edge.match_set -= intersection
+                    if not edge.match_set:
+                        to_remove.add(edge)
+                case ConsumeString():
+                    if edge.match_string in intersection:
+                        to_remove.add(edge)
+                case _:
+                    raise NotImplementedError()
+        for edge in to_remove:
+            row_set.discard(edge)
+            column_set.discard(edge)
+        if to_remove:
+            # States were changed, check again
+            todo += out1, out2
+        # Add new state for the intersection
+        new_state = self.add_state()
+        # TODO: assuming that intersect should be ConsumeAny
+        self.connect(state, new_state, ConsumeAny(intersection))
+        # Connect outputs
+        for j in range(self.size):
+            for edge in self.transition_table[out1, j]\
+                    | self.transition_table[out2, j]:
+                self.connect(new_state, j, edge)
+        todo.append(new_state)
 
     def _remove_state(self, state: State) -> None:
         if self.start > state:
@@ -252,7 +285,7 @@ class Regex:
                          MatchConditions.epsilon_transition)
             self.end = offset + other.end
         elif isinstance(other, ParserPredicate):
-            new_state = self.append_state()
+            new_state = self.add_state()
             self.connect(self.end, new_state, other)
             self.end = new_state
         else:

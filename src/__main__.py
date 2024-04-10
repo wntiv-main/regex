@@ -15,11 +15,9 @@ def main():
     #     r"(?:=>\s*(?P<rtype>\w+))?").build()
     mfv = MultiFigureViewer()
 
-    def debug(rx: Regex, msg: str, remove: set[State]):
+    def debug(rx: Regex, msg: str):
         view = DebugGraphViewer(rx.transition_table,
                                 rx.start, rx.end)
-        for state in remove:
-            view._color_overrides[state] = (1.0, 0.0, 0.0)
         fig = view.render()
         fig.suptitle(str(rx), fontsize=8)
         fig.canvas.manager.set_window_title(msg)

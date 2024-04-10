@@ -46,8 +46,7 @@ class _RegexFactory:
     def _append(self, connection: 'ParserPredicate | rx.Regex') -> None:
         if isinstance(connection, ParserPredicate):
             connection = rx.Regex(connection, _privated=None)
-        if self._last_token is not None:
-            self._regex += self._last_token
+        self._connect_last()
         self._last_token = connection
 
     def _consume_char(self) -> str:
@@ -133,17 +132,18 @@ class _RegexFactory:
         # ranges:
         # {chr(i) for i in range(ord(start), ord(end) + 1)}
 
+    def _connect_last(self):
+        if self._last_token is not None:
+            self._regex += self._last_token
+            self._last_token = None
+
     def build(self, *, _nested: bool = False) -> 'rx.Regex':
         while self._cur < len(self._pattern):
             if self._parse_char(self._consume_char(), _nested):
                 break
-        self._regex += self._last_token
+        self._connect_last()
         if not _nested:
-            self._regex._optimise()
-            self._regex._optimise()
-            self._regex._optimise()
-            self._regex._optimise()
-            self._regex._optimise()
+            self._regex._debug("start")
             self._regex._optimise()
         return self._regex
 
@@ -253,6 +253,7 @@ class _RegexFactory:
                 self._cur = rh_builder._cur
                 self._capture_auto_id = rh_builder._capture_auto_id
                 rh_group = rh_builder.build(_nested=nested)
+                self._connect_last()
                 self._regex |= rh_group
                 return True
             # All other chars:
