@@ -24,7 +24,7 @@ def main():
         mfv.add(fig)
     Regex._debug_function = debug
 
-    rx = Regex(r"(?:a?b?c?)*")
+    rx = Regex(r"\sa|.b")
     print(rx)
     mfv.add(DebugGraphViewer(rx.transition_table,
                              rx.start, rx.end).render())

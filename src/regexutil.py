@@ -101,6 +101,7 @@ class SignedSet(Generic[T]):
                 case True, False:
                     self._negate = False
                     self._accept = el._accept - self._accept
+        return self
     __iand__ = i_intersection
 
     def symmetric_difference(self, other: 'SignedSet') -> 'SignedSet':
@@ -111,7 +112,7 @@ class SignedSet(Generic[T]):
                 return SignedSet(self._accept ^ other._accept, True)
     __xor__ = symmetric_difference
 
-    def i_symmetric_difference(self, other: 'SignedSet') -> 'SignedSet':
+    def i_symmetric_difference(self, other: 'SignedSet') -> Self:
         match self._negate, other._negate:
             case False, False:
                 self._accept ^= other._accept
@@ -122,6 +123,7 @@ class SignedSet(Generic[T]):
             case (False, True) | (True, False):
                 self._negate = True
                 self._accept ^= other._accept
+        return self
     __ixor__ = i_symmetric_difference
 
     def difference(self, other: 'SignedSet') -> 'SignedSet':
@@ -136,7 +138,7 @@ class SignedSet(Generic[T]):
                 return SignedSet(self._accept | other._accept, True)
     __sub__ = difference
 
-    def i_difference(self, other: 'SignedSet') -> 'SignedSet':
+    def i_difference(self, other: 'SignedSet') -> Self:
         match self._negate, other._negate:
             case False, False:
                 self._accept -= other._accept
@@ -147,6 +149,7 @@ class SignedSet(Generic[T]):
                 self._accept &= other._accept
             case True, False:
                 self._accept |= other._accept
+        return self
     __isub__ = i_difference
 
     def __hash__(self) -> int:
