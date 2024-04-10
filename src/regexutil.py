@@ -86,7 +86,7 @@ class SignedSet(Generic[T]):
         ...
 
     def intersection(*sets):
-        return SignedSet().i_intersection(*sets)
+        return SignedSet(negate=True).i_intersection(*sets)
     __and__ = intersection
 
     def i_intersection(self, *sets: 'SignedSet') -> Self:
