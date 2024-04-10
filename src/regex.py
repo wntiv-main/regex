@@ -123,7 +123,10 @@ class Regex:
 
     def _optimise(self):
         to_remove: set[State] = set()
-        for i in range(self.size):
+        # Use task queue to allow reiteration if a state is "dirtied"
+        todo: list[State] = list(range(self.size))
+        while todo:
+            i = todo.pop()
             for j in range(self.size):
                 if i in to_remove or j in to_remove:
                     continue
