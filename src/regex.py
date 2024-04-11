@@ -1,8 +1,7 @@
 __all__ = ["Regex", "State"]
 __author__ = "Callum Hynes"
 
-from functools import reduce
-from typing import Any, Callable, Optional, Self, Sequence, TypeAlias, overload
+from typing import Any, Callable, Self, Sequence, TypeAlias, overload
 import numpy as np
 
 from regex_factory import _RegexFactory
@@ -70,7 +69,8 @@ class Regex:
                 result.end = 0
                 return result
             case _:
-                raise TypeError(f"Invalid args to {cls.__name__}()", args)
+                raise TypeError(f"Invalid args to {cls.__name__}(): ",
+                                args, kwargs)
 
     @property
     def size(self) -> int:
@@ -293,6 +293,20 @@ class Regex:
             raise NotImplementedError()
         return self
 
+    def __add__(self, other: Any) -> 'Regex':
+        result = self.copy()
+        result += other
+        return result
+
+    def __imul__(self, scalar: int) -> Self:
+        for _ in range(scalar):
+            self += self
+
+    def __mul__(self, scalar: int) -> Self:
+        result = self.copy()
+        result *= scalar
+        return result
+
     def __ior__(self, other: 'Regex') -> Self:
         other = other.copy()
         offset = self.size
@@ -305,10 +319,29 @@ class Regex:
                      MatchConditions.epsilon_transition)
         self.end = offset + other.end
         return self
-    
-    def match(self, input: str) -> bool:
-        # TODO
-        pass
+
+    def __or__(self, other: 'Regex') -> 'Regex':
+        result = self.copy()
+        result |= other
+        return result
+
+    def is_in(self, input: str) -> bool:
+        ctx = MatchConditions(input)
+        state = self.start
+        while state != self.end:
+            for i in range(self.size):
+                for edge in self.transition_table[state, i]:
+                    edge: ParserPredicate
+                    if edge.evaluate(ctx):
+                        state = i
+                        break  # break to outer loop
+                else:
+                    continue
+                break
+            else:
+                # No match
+                return False
+        return True
 
     def optional(self) -> Self:
         self.connect(self.start, self.end,
