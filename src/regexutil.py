@@ -208,7 +208,7 @@ class ParserPredicate(ABC):
     def __call__(self, *args):
         match args:
             case (x,) if callable(x):
-                return self
+                return self.copy()
             case (MatchConditions() as ctx,):
                 return self.evaluate(ctx)
             case _:
@@ -238,6 +238,10 @@ class ParserPredicate(ABC):
 
     @abstractmethod
     def __str__(self) -> str:
+        ...
+        
+    @abstractmethod
+    def copy(self) -> 'ParserPredicate':
         ...
 
 
@@ -282,6 +286,9 @@ class GenericParserPredicate(ParserPredicate):
                 f"_symbol={self._sym!r}, "
                 f"_coverage={self._coverage!r}, "
                 f"_evaluate={self._evaluate!r})")
+        
+    def copy(self) -> 'GenericParserPredicate':
+        return GenericParserPredicate(self._sym, self._coverage, self._evaluate)
 
 
 class ConsumeString(ParserPredicate):
@@ -319,6 +326,9 @@ class ConsumeString(ParserPredicate):
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.match_string!r})"
+    
+    def copy(self) -> 'ConsumeString':
+        return ConsumeString(self.match_string)
 
 
 class ConsumeAny(ParserPredicate):
@@ -357,6 +367,9 @@ class ConsumeAny(ParserPredicate):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.match_set!r})"
 
+    def copy(self) -> 'ConsumeAny':
+        return ConsumeAny(self.match_set.copy())
+        
 
 class MatchConditions:
     _alpha = {chr(i) for i in range(ord('a'), ord('z') + 1)}\
