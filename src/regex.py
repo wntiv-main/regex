@@ -275,6 +275,7 @@ class Regex:
                                                       other.shape[1]))],
             [Regex._empty_arr((other.shape[0], self.size)), other]])
 
+    # TODO: non-inline versions
     def __iadd__(self, other: Any) -> Self:
         if isinstance(other, Regex):
             other = other.copy()
@@ -304,6 +305,10 @@ class Regex:
                      MatchConditions.epsilon_transition)
         self.end = offset + other.end
         return self
+    
+    def match(self, input: str) -> bool:
+        # TODO
+        pass
 
     def optional(self) -> Self:
         self.connect(self.start, self.end,
