@@ -3,7 +3,11 @@ __author__ = "Callum Hynes"
 
 from functools import reduce
 from typing import Any, Callable, Optional, Self, Sequence, TypeAlias, overload
-import numpy as np
+try:
+    import numpy as np
+except ImportError:
+    print("Library requires numpy: `pip install numpy`")
+    exit()
 
 from regex_factory import _RegexFactory
 from regexutil import ConsumeAny, ConsumeString, MatchConditions, ParserPredicate, SignedSet
