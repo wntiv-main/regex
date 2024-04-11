@@ -22,13 +22,15 @@ def main():
         fig.suptitle(str(rx), fontsize=8)
         fig.canvas.manager.set_window_title(msg)
         mfv.add(fig)
+        print(f"{msg}:\n{rx}")
     Regex._debug_function = debug
-
-    rx = Regex(r"\sa|.b")
-    print(rx)
-    mfv.add(DebugGraphViewer(rx.transition_table,
-                             rx.start, rx.end).render())
-    mfv.display()
+    try:
+        rx = Regex(r"a|b")
+        print(rx)
+        mfv.add(DebugGraphViewer(rx.transition_table,
+                                 rx.start, rx.end).render())
+    finally:
+        mfv.display()
 
 
 if __name__ == "__main__":
