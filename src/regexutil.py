@@ -425,12 +425,12 @@ class MatchConditions:
     def consume_not_newline(self): ...
 
     @represented_by("Z", escaped=True)
-    @GenericParserPredicate.of(symbol="\Z", coverage=SignedSet())
+    @GenericParserPredicate.of(symbol="\\Z", coverage=SignedSet())
     def end(self) -> bool:
         return self._cursor >= len(self._string)
 
     @represented_by("A", escaped=True)
-    @GenericParserPredicate.of(symbol="\A",
+    @GenericParserPredicate.of(symbol="\\A",
                                coverage=SignedSet(negate=True))
     def begin(self):
         return self._cursor <= 0
