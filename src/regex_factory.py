@@ -1,3 +1,4 @@
+from enum import IntEnum, auto
 from typing import Callable
 
 import regex as rx
@@ -17,6 +18,14 @@ class PatternParseError(Exception):
     def __str__(self) -> str:
         return f"{self.message}Caused by "\
             f"{self.__cause__.__class__.__name__}: {self.__cause__}"
+
+
+class _NestedType(IntEnum):
+    TOP = auto()
+    # Bracketed groups: (a)
+    NESTED_GROUP = auto()
+    # Alternatives: a|b
+    NESTED_ALTERNATIVE = auto()
 
 
 class _RegexFactory:
@@ -137,13 +146,18 @@ class _RegexFactory:
             self._regex += self._last_token
             self._last_token = None
 
-    def build(self, *, _nested: bool = False) -> 'rx.Regex':
+    def build(self, *, _nested: _NestedType = _NestedType.TOP) \
+            -> 'rx.Regex':
         while self._cur < len(self._pattern):
             if self._parse_char(self._consume_char(), _nested):
                 break
         self._connect_last()
-        if not _nested:
+        if _nested == _NestedType.TOP:
             self._regex._debug("start")
+            # Loop until can match
+            self._regex.connect(self._regex.start,
+                                self._regex.start,
+                                MatchConditions.consume_any)
             self._regex._optimise()
         return self._regex
 
@@ -163,7 +177,7 @@ class _RegexFactory:
                     f"Unexpected sequence: "
                     f"'{bk if self._escaped else ''}{char}'")
 
-    def _parse_char(self, char: str, nested: bool) -> bool:
+    def _parse_char(self, char: str, nested: _NestedType) -> bool:
         if char == '\\':
             self._parse_escaped(self._consume_char())
             return False
@@ -222,7 +236,8 @@ class _RegexFactory:
                     _cursor=self._cur,
                     _cid=self._capture_auto_id,
                     _open_bracket_pos=start_pos)
-                inner_group = inner_builder.build(_nested=True)
+                inner_group = inner_builder.build(
+                    _nested=_NestedType.NESTED_GROUP)
                 # Copy new state
                 self._cur = inner_builder._cur
                 self._capture_auto_id = inner_builder._capture_auto_id
@@ -235,7 +250,7 @@ class _RegexFactory:
                     _ = self._find_next(')', self._is_unescaped,
                                         _started_at=self._cursor_started)
             case ')':
-                if not nested:
+                if nested != _NestedType.NESTED_GROUP:
                     # TODO: error message
                     raise PatternParseError("Unopened bracket")
                 # Exit parse loop early, jump to outer group
@@ -252,7 +267,9 @@ class _RegexFactory:
                     _open_bracket_pos=self._cursor_started)
                 self._cur = rh_builder._cur
                 self._capture_auto_id = rh_builder._capture_auto_id
-                rh_group = rh_builder.build(_nested=nested)
+                nest_type = (_NestedType.NESTED_ALTERNATIVE
+                             if nested == _NestedType.TOP else nested)
+                rh_group = rh_builder.build(_nested=nest_type)
                 self._connect_last()
                 self._regex |= rh_group
                 return True
