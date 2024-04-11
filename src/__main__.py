@@ -29,6 +29,8 @@ def main():
         print(rx)
         mfv.add(DebugGraphViewer(rx.transition_table,
                                  rx.start, rx.end).render())
+    except Exception as e:
+        print(e)
     finally:
         mfv.display()
 
