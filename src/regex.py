@@ -231,7 +231,7 @@ class Regex:
                 case _:
                     raise NotImplementedError()
         # States were changed, check again
-        todo |= out1, out2
+        todo |= set((out1, out2))
         # Add new state for the intersection
         new_state = self.add_state()
         # TODO: assuming that intersect should be ConsumeAny
