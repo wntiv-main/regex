@@ -125,26 +125,34 @@ class Regex:
                 return False
         return True
 
+    def _remove_if_unreachable(self, state: State) -> bool:
+        if (not self.transition_table[:, state].any()
+                and not state == self.start):
+            self._remove_state(state)
+            return True
+        return False
+
+
     def _optimise(self):
         # Use task queue to allow reiteration if a state is "dirtied"
-        print("hello?")
         todo: set[State] = set(range(self.size))
+
+        def shift_todo(after: State):
+            # Fix indices in list after removing state
+            nonlocal todo
+            temp = set()
+            for i in todo:
+                if i > after:
+                    temp.add(i - 1)
+                elif i != after:
+                    temp.add(i)
+            todo = temp
+
         while todo:
             i = todo.pop()
-            print(i, todo)
             # Remove redundant states
-            if (not self.transition_table[:, i].any()
-                    and not i == self.start):
-                self._remove_state(i)
-                # Fix indices in list
-                temp = set()
-                for j in todo:
-                    if j > i:
-                        temp.add(j - 1)
-                    else:
-                        temp.add(j)
-                print(f"{todo} -> {temp}")
-                todo = temp
+            if self._remove_if_unreachable(i):
+                shift_todo(i)
                 continue
             # Iterate states inner loop
             j = 0
@@ -160,8 +168,13 @@ class Regex:
                     self.transition_table[i, j].remove(
                         MatchConditions.epsilon_transition)
                     todo.add(i)
-                    todo.add(j)
+                    if self._remove_if_unreachable(j):
+                        shift_todo(j)
+                    else:
+                        todo.add(j)
                     self._debug(f"e-closed {i} -> {j}")
+                    j = 0  # Merged outputs, reset loop
+                    continue
                 # minimisation
                 if self._can_minify(i, j):
                     self._merge(i, j)
@@ -171,19 +184,12 @@ class Regex:
                         self.end = i
                     self._remove_state(j)
                     # State removed, handle shifted indices
-                    # Reverse order, removing elements during iteration
-                    temp = set()
-                    for k in todo:
-                        if k > j:
-                            temp.add(k - 1)
-                        elif k != j:
-                            temp.add(k)
-                    print(f"{todo} -> {temp}")
-                    todo = temp
+                    shift_todo(j)
                     if i > j:
                         i -= 1
-                    j -= 1
                     self._debug(f"merged {j} -> {i}")
+                    j = 0  # Merged states, reset loop
+                    continue
                 j += 1
             # > Powerset construction <
             # While loop as expect size to change
@@ -235,18 +241,23 @@ class Regex:
                 case _:
                     raise NotImplementedError()
         # States were changed, check again
-        todo |= set((out1, out2))
+        todo.add(out1)
+        todo.add(out2)
         # Add new state for the intersection
         new_state = self.add_state()
         # TODO: assuming that intersect should be ConsumeAny
         self.connect(state, new_state, ConsumeAny(intersection))
         # Connect outputs
-        for j in range(self.size):
-            for edge in self.transition_table[out1, j]\
-                    | self.transition_table[out2, j]:
-                self.connect(new_state, j, edge)
+        self.connect(new_state, out1,
+                     MatchConditions.epsilon_transition)
+        self.connect(new_state, out2,
+                     MatchConditions.epsilon_transition)
+        # for j in range(self.size):
+        #     for edge in self.transition_table[out1, j]\
+        #             | self.transition_table[out2, j]:
+        #         self.connect(new_state, j, edge)
         self._debug(f"power {state} -> {out1} & {out2} -> {new_state}")
-        todo.append(new_state)
+        todo.add(new_state)
 
     def _remove_state(self, state: State) -> None:
         if self.start > state:
