@@ -22,7 +22,7 @@ class Regex:
         Regex._debug_function(self, msg)
 
     # S_n = x where table[S_(n-1), x].any(x=>x(ctx) is True)
-    transition_table: np.ndarray[set[ParserPredicate]]
+    edge_map: np.ndarray[set[ParserPredicate]]
     start: State
     end: State
 
@@ -53,7 +53,7 @@ class Regex:
                 return _RegexFactory(regex).build()
             case (ParserPredicate() as x,), {"_privated": _}:
                 result = super().__new__(cls)
-                result.transition_table = Regex._empty_arr((2, 2))
+                result.edge_map = Regex._empty_arr((2, 2))
                 result.start = 0
                 result.end = 1
                 result.connect(result.start, result.end, x)
@@ -61,14 +61,14 @@ class Regex:
             case (Regex() as x,), {}:
                 result = super().__new__(cls)
                 # Deep copy sets within table
-                result.transition_table = np.vectorize(
-                    Regex._inner_copy_set)(x.transition_table)
+                result.edge_map = np.vectorize(
+                    Regex._inner_copy_set)(x.edge_map)
                 result.start = x.start
                 result.end = x.end
                 return result
             case (), {"_privated": _}:
                 result = super().__new__(cls)
-                result.transition_table = Regex._empty_arr((1, 1))
+                result.edge_map = Regex._empty_arr((1, 1))
                 result.start = 0
                 result.end = 0
                 return result
@@ -78,10 +78,10 @@ class Regex:
 
     @property
     def size(self) -> int:
-        assert (len(self.transition_table.shape) == 2
-                and self.transition_table.shape[0]
-                == self.transition_table.shape[1])
-        return self.transition_table.shape[0]
+        assert (len(self.edge_map.shape) == 2
+                and self.edge_map.shape[0]
+                == self.edge_map.shape[1])
+        return self.edge_map.shape[0]
     __len__ = size.fget
 
     @staticmethod
@@ -98,35 +98,35 @@ class Regex:
                 start_state: State,
                 end_state: State,
                 connection: ParserPredicate) -> None:
-        if not self.transition_table[start_state, end_state]:
-            self.transition_table[start_state, end_state] = set()
-        self.transition_table[start_state, end_state].add(connection)
+        if not self.edge_map[start_state, end_state]:
+            self.edge_map[start_state, end_state] = set()
+        self.edge_map[start_state, end_state].add(connection)
 
     def connect_many(self,
                      start_state: State,
                      end_state: State,
                      connections: set[ParserPredicate]) -> None:
-        if not self.transition_table[start_state, end_state]:
-            self.transition_table[start_state, end_state] = set()
-        self.transition_table[start_state, end_state] |= connections
+        if not self.edge_map[start_state, end_state]:
+            self.edge_map[start_state, end_state] = set()
+        self.edge_map[start_state, end_state] |= connections
 
     def _can_minify(self, s1: State, s2: State) -> bool:
-        if s1 == s2:
+        if s1 == s2 or s1 == self.end or s2 == self.end:
             return False
         for i in range(self.size):
             if i == s1 or i == s2:
-                diff = (self.transition_table[s1, i]
-                        ^ self.transition_table[s2, i])
+                diff = (self.edge_map[s1, i]
+                        ^ self.edge_map[s2, i])
                 for edge in diff:
                     if edge != MatchConditions.epsilon_transition:
                         return False
-            elif (self.transition_table[s1, i]
-                  != self.transition_table[s2, i]):
+            elif (self.edge_map[s1, i]
+                  != self.edge_map[s2, i]):
                 return False
         return True
 
     def _remove_if_unreachable(self, state: State) -> bool:
-        if (not self.transition_table[:, state].any()
+        if (not self.edge_map[:, state].any()
                 and not state == self.start):
             self._remove_state(state)
             return True
@@ -150,6 +150,7 @@ class Regex:
 
         while todo:
             i = todo.pop()
+            print(i, todo)
             # Remove redundant states
             if self._remove_if_unreachable(i):
                 shift_todo(i)
@@ -159,20 +160,28 @@ class Regex:
             while j < self.size:
                 # TODO: soon edges will have more info
                 if (MatchConditions.epsilon_transition
-                        in self.transition_table[i, j]):
-                    if j == self.end and i != self.end:
-                        self.end = i
-                        self.connect(j, i,
-                                     MatchConditions.epsilon_transition)
+                        in self.edge_map[i, j]
+                        and j == self.end):
+                    self._merge_inputs(j, i)
+                    self._remove_state(i)
+                    shift_todo(i)
+                    self._debug(f"e-closed {self.end} <- {i}")
+                    todo.add(self.end)
+                    continue
+                if (MatchConditions.epsilon_transition
+                        in self.edge_map[i, j]
+                        and j != self.end):
                     self._merge_outputs(i, j)
-                    self.transition_table[i, j].remove(
+                    self.edge_map[i, j].remove(
                         MatchConditions.epsilon_transition)
                     todo.add(i)
                     if self._remove_if_unreachable(j):
                         shift_todo(j)
+                        if i > j:
+                            i -= 1
                     else:
                         todo.add(j)
-                    self._debug(f"e-closed {i} -> {j}")
+                    self._debug(f"e-closed {i} <- {j}")
                     j = 0  # Merged outputs, reset loop
                     continue
                 # minimisation
@@ -213,8 +222,8 @@ class Regex:
             self, todo: set[State], state: State,
             out1: State, out2: State):
         # Check if sets have any overlap
-        row_set = self.transition_table[state, out1]
-        column_set = self.transition_table[state, out2]
+        row_set = self.edge_map[state, out1]
+        column_set = self.edge_map[state, out2]
         if MatchConditions.epsilon_transition in (row_set | column_set):
             todo.add(state)
             return
@@ -265,22 +274,22 @@ class Regex:
         if self.end > state:
             self.end -= 1
         # remove both row and column for `state`
-        self.transition_table = np.delete(
+        self.edge_map = np.delete(
             np.delete(
-                self.transition_table,
+                self.edge_map,
                 state, 0),
             state, 1)
 
     def _merge_outputs(self, s1_idx: State, s2_idx: State) -> None:
         # Iterate s2 row and make same connections from s1
-        it = np.nditer(self.transition_table[s2_idx, :],
+        it = np.nditer(self.edge_map[s2_idx, :],
                        flags=['c_index', 'refs_ok'])
         for edges in it:
             self.connect_many(s1_idx, it.index, edges)
 
     def _merge_inputs(self, s1_idx: State, s2_idx: State) -> None:
         # Iterate s2 column and make same connections to s1
-        it = np.nditer(self.transition_table[:, s2_idx],
+        it = np.nditer(self.edge_map[:, s2_idx],
                        flags=['c_index', 'refs_ok'])
         for edges in it:
             self.connect_many(it.index, s1_idx, edges)
@@ -293,17 +302,17 @@ class Regex:
         # constructs block matrix like:
         # [[self,  empty]
         #  [empty, other]]
-        self.transition_table = np.block([
-            [self.transition_table, Regex._empty_arr((self.size,
+        self.edge_map = np.block([
+            [self.edge_map, Regex._empty_arr((self.size,
                                                       other.shape[1]))],
             [Regex._empty_arr((other.shape[0], self.size)), other]])
 
     # TODO: non-inline versions
     def __iadd__(self, other: Any) -> Self:
         if isinstance(other, Regex):
-            other = other.copy()
+            other: Regex = other.copy()
             offset = self.size
-            self._diagonal_block_with(other.transition_table)
+            self._diagonal_block_with(other.edge_map)
             # Connect our end to their start
             self.connect(self.end, offset + other.start,
                          MatchConditions.epsilon_transition)
@@ -333,7 +342,7 @@ class Regex:
     def __ior__(self, other: 'Regex') -> Self:
         other = other.copy()
         offset = self.size
-        self._diagonal_block_with(other.transition_table)
+        self._diagonal_block_with(other.edge_map)
         # Connect our start to their start
         self.connect(self.start, offset + other.start,
                      MatchConditions.epsilon_transition)
@@ -353,7 +362,7 @@ class Regex:
         state = self.start
         while state != self.end:
             for i in range(self.size):
-                for edge in self.transition_table[state, i]:
+                for edge in self.edge_map[state, i]:
                     edge: ParserPredicate
                     if edge.evaluate(ctx):
                         state = i
@@ -391,4 +400,4 @@ class Regex:
                 f"{{{', '.join([str(edge) for edge in edges])}}}"
                 if isinstance(edges, set) else "{}"
                 for edges in row])
-            for row in self.transition_table]), self.start, self.end)
+            for row in self.edge_map]), self.start, self.end)

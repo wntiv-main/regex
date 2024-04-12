@@ -10,14 +10,16 @@ from regexutil import CaptureGroup, ConsumeAny, ConsumeString, \
 class PatternParseError(Exception):
     message: str
 
-    def __init__(self, msg: str, e: Exception | None = None) -> None:
-        super().__init__(msg, e)
+    def __init__(self, msg: str) -> None:
+        super().__init__(msg)
         self.message = msg
-        self.__cause__ = e
 
     def __str__(self) -> str:
-        return f"{self.message}Caused by "\
-            f"{self.__cause__.__class__.__name__}: {self.__cause__}"
+        if self.__cause___ is None:
+            return self.message
+        cause_cls = self.__cause__.__class__.__name__
+        return (f"{self.message}\nCaused by {cause_cls}: "
+                f"{self.__cause__}")
 
 
 class _NestedType(IntEnum):
@@ -42,7 +44,7 @@ class _RegexFactory:
                  _cid: int = 0,
                  _open_bracket_pos: int = 0) -> None:
         regex = rx.Regex(_privated=None)
-        regex.transition_table = rx.Regex._empty_arr((1, 1))
+        regex.edge_map = rx.Regex._empty_arr((1, 1))
         self._regex = regex
         self._pattern = pattern
         self._cur = _cursor
@@ -90,19 +92,17 @@ class _RegexFactory:
             return current_attempt
         except ValueError as e:
             if ch in _open_ch_map:
-                raise _RegexFactory.PatternParseError(
-                    f"""Could not find closing '{ch}' for opening \
-'{_open_ch_map[ch]}' at position {_started_at}:
-"{self._pattern}"
- {' ' * _started_at}^ here
-""", e)
+                raise PatternParseError(
+                    f"Could not find closing '{ch}' for opening "
+                    f"'{_open_ch_map[ch]}' at position {_started_at}:\n"
+                    f'"{self._pattern}"\n'
+                    f" {' ' * _started_at}^ here") from e
             else:
-                raise _RegexFactory.PatternParseError(
-                    f"""Could not find '{ch}' searching from position \
-{_started_at}:
-"{self._pattern}"
- {' ' * _started_at}^ here
-""", e)
+                raise PatternParseError(
+                    f"Could not find '{ch}' searching from position "
+                    f"{_started_at}:\n"
+                    f'"{self._pattern}"\n'
+                    f" {' ' * _started_at}^ here") from e
 
     def _consume_till_next(
             self,

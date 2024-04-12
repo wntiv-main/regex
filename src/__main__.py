@@ -1,3 +1,4 @@
+import traceback
 from regex import *
 
 if __name__ == "__main__":
@@ -16,7 +17,7 @@ def main():
     mfv = MultiFigureViewer()
 
     def debug(rx: Regex, msg: str):
-        view = DebugGraphViewer(rx.transition_table,
+        view = DebugGraphViewer(rx.edge_map,
                                 rx.start, rx.end)
         fig = view.render()
         fig.suptitle(str(rx), fontsize=8)
@@ -27,10 +28,10 @@ def main():
     try:
         rx = Regex(r"a|b")
         print(rx)
-        mfv.add(DebugGraphViewer(rx.transition_table,
+        mfv.add(DebugGraphViewer(rx.edge_map,
                                  rx.start, rx.end).render())
-    except Exception as e:
-        print(e)
+    except Exception:
+        traceback.print_exc()
     finally:
         mfv.display()
 
