@@ -156,6 +156,7 @@ class Regex:
                 shift_todo(i)
                 continue
             # Iterate states inner loop
+            countinue_outer_loop: bool = False
             j = 0
             while j < self.size:
                 # TODO: soon edges will have more info
@@ -167,7 +168,8 @@ class Regex:
                     shift_todo(i)
                     self._debug(f"e-closed {self.end} <- {i}")
                     todo.add(self.end)
-                    continue
+                    countinue_outer_loop = True
+                    break
                 if (MatchConditions.epsilon_transition
                         in self.edge_map[i, j]
                         and j != self.end):
@@ -200,6 +202,8 @@ class Regex:
                     j = 0  # Merged states, reset loop
                     continue
                 j += 1
+            if countinue_outer_loop:
+                continue
             # > Powerset construction <
             # While loop as expect size to change
             # Iterate lower half of triangle:
