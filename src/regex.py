@@ -110,7 +110,7 @@ class Regex:
             self.edge_map[start_state, end_state] = set()
         self.edge_map[start_state, end_state] |= connections
 
-    def _can_minify(self, s1: State, s2: State) -> bool:
+    def _can_minify_outputs(self, s1: State, s2: State) -> bool:
         if s1 == s2 or s1 == self.end or s2 == self.end:
             return False
         for i in range(self.size):
@@ -125,13 +125,33 @@ class Regex:
                 return False
         return True
 
+    def _num_inputs(self, state: State) -> int:
+        return np.sum(np.vectorize(len)(self.edge_map[:, state]))
+
+    def _num_outputs(self, state: State) -> int:
+        return np.sum(np.vectorize(len)(self.edge_map[state, :]))
+
+    def _can_minify_inputs(self, s1: State, s2: State) -> bool:
+        if s1 == s2 or s1 == self.start or s2 == self.start:
+            return False
+        for i in range(self.size):
+            if i == s1 or i == s2:
+                diff = (self.edge_map[i, s1]
+                        ^ self.edge_map[i, s2])
+                for edge in diff:
+                    if edge != MatchConditions.epsilon_transition:
+                        return False
+            elif (self.edge_map[i, s1]
+                  != self.edge_map[i, s2]):
+                return False
+        return True
+
     def _remove_if_unreachable(self, state: State) -> bool:
         if (not self.edge_map[:, state].any()
                 and not state == self.start):
             self._remove_state(state)
             return True
         return False
-
 
     def _optimise(self):
         # Use task queue to allow reiteration if a state is "dirtied"
@@ -150,7 +170,6 @@ class Regex:
 
         while todo:
             i = todo.pop()
-            print(i, todo)
             # Remove redundant states
             if self._remove_if_unreachable(i):
                 shift_todo(i)
@@ -160,45 +179,62 @@ class Regex:
             j = 0
             while j < self.size:
                 # TODO: soon edges will have more info
+                # Resolve epsilon transitions
                 if (MatchConditions.epsilon_transition
-                        in self.edge_map[i, j]
-                        and j == self.end):
-                    self._merge_inputs(j, i)
-                    self._remove_state(i)
-                    shift_todo(i)
-                    self._debug(f"e-closed {self.end} <- {i}")
-                    todo.add(self.end)
-                    countinue_outer_loop = True
-                    break
-                if (MatchConditions.epsilon_transition
-                        in self.edge_map[i, j]
-                        and j != self.end):
-                    self._merge_outputs(i, j)
-                    self.edge_map[i, j].remove(
-                        MatchConditions.epsilon_transition)
-                    todo.add(i)
-                    if self._remove_if_unreachable(j):
-                        shift_todo(j)
-                        if i > j:
-                            i -= 1
-                    else:
-                        todo.add(j)
-                    self._debug(f"e-closed {i} <- {j}")
-                    j = 0  # Merged outputs, reset loop
-                    continue
+                        in self.edge_map[i, j]):
+                    if i == j:
+                        self.edge_map[i, j].remove(
+                            MatchConditions.epsilon_transition)
+                        self._debug(f"e-closed loop on {i}")
+                    elif j == self.end and (self._num_inputs(j) == 1
+                                            or self._num_outputs(i) == 1):
+                        self.edge_map[i, j].remove(
+                            MatchConditions.epsilon_transition)
+                        self._merge(j, i)
+                        self._remove_state(i)
+                        shift_todo(i)
+                        self._debug(f"e-closed inputs {j} <- {i}")
+                        # Deleted `i` state, goto next `i` state
+                        countinue_outer_loop = True
+                        break
+                    elif j != self.end:
+                        self._merge_outputs(i, j)
+                        self.edge_map[i, j].remove(
+                            MatchConditions.epsilon_transition)
+                        todo.add(i)
+                        if self._remove_if_unreachable(j):
+                            shift_todo(j)
+                            if i > j:
+                                i -= 1
+                        else:
+                            todo.add(j)
+                        self._debug(f"e-closed {i} <- {j}")
+                        j = 0  # Merged outputs, reset loop
+                        continue
                 # minimisation
-                if self._can_minify(i, j):
-                    self._merge(i, j)
+                if self._can_minify_outputs(i, j):
                     if j == self.start:
                         self.start = i
-                    if j == self.end:
-                        self.end = i
+                    self._merge_inputs(i, j)
                     self._remove_state(j)
                     # State removed, handle shifted indices
                     shift_todo(j)
                     if i > j:
                         i -= 1
                     self._debug(f"merged {j} -> {i}")
+                    j = 0  # Merged states, reset loop
+                    continue
+                if self._can_minify_inputs(i, j):
+                    if j == self.end:
+                        self.end = i
+                    self._merge_outputs(i, j)
+                    self._remove_state(j)
+                    # State removed, handle shifted indices
+                    shift_todo(j)
+                    if i > j:
+                        i -= 1
+                    self._debug(f"merged {j} -> {i}")
+                    todo.add(i)
                     j = 0  # Merged states, reset loop
                     continue
                 j += 1
