@@ -295,7 +295,12 @@ class Regex:
         # Add new state for the intersection
         new_state = self.add_state()
         # TODO: assuming that intersect should be ConsumeAny
-        self.connect(state, new_state, ConsumeAny(intersection))
+        intersect: ParserPredicate
+        if intersection.length() == 1:
+            intersect = ConsumeString(intersection.unwrap_value())
+        else:
+            intersect = ConsumeAny(intersection)
+        self.connect(state, new_state, intersect)
         # Connect outputs
         self.connect(new_state, out1,
                      MatchConditions.epsilon_transition)
