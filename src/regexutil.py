@@ -44,6 +44,18 @@ class SignedSet(Generic[T]):
             self._accept = set() if value is None else set(value)
             self._negate = negate
 
+    def add(self, el: T) -> None:
+        if self._negate:
+            self._accept.discard(el)
+        else:
+            self._accept.add(el)
+
+    def discard(self, el: T) -> None:
+        if self._negate:
+            self._accept.add(el)
+        else:
+            self._accept.discard(el)
+
     def __neg__(self):
         return SignedSet(self, True)
 

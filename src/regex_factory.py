@@ -10,17 +10,28 @@ from regexutil import CaptureGroup, ConsumeAny, ConsumeString, \
 
 class PatternParseError(Exception):
     message: str
+    parse_src: str | None
+    parse_idx: int | None
 
-    def __init__(self, msg: str) -> None:
-        super().__init__(msg)
+    def __init__(self, msg: str,
+                 src: str | None = None,
+                 idx: int | None = None) -> None:
+        super().__init__(msg, src, idx)
         self.message = msg
+        self.parse_src = src
+        self.parse_idx = idx
 
     def __str__(self) -> str:
-        if self.__cause___ is None:
-            return self.message
-        cause_cls = self.__cause__.__class__.__name__
-        return (f"{self.message}\nCaused by {cause_cls}: "
-                f"{self.__cause__}")
+        result = self.message
+        if self.parse_idx is not None and self.parse_src is not None:
+            # Add parse index visual
+            result += (f" at position {self.parse_idx}:"
+                       f"\n\"{self.parse_src}\""
+                       f"\n {' ' * self.parse_idx}^- here")
+        if self.__cause__ is not None:
+            cause_cls = self.__cause__.__class__.__name__
+            result += f"\nCaused by {cause_cls}: {self.__cause__}"
+        return result
 
 
 class _NestedType(IntEnum):
@@ -94,16 +105,15 @@ class _RegexFactory:
         except ValueError as e:
             if ch in _open_ch_map:
                 raise PatternParseError(
-                    f"Could not find closing '{ch}' for opening "
-                    f"'{_open_ch_map[ch]}' at position {_started_at}:\n"
-                    f'"{self._pattern}"\n'
-                    f" {' ' * _started_at}^ here") from e
+                    (f"Could not find closing '{ch}' for opening "
+                     f"'{_open_ch_map[ch]}'"),
+                    self._pattern,
+                    _started_at) from e
             else:
                 raise PatternParseError(
-                    f"Could not find '{ch}' searching from position "
-                    f"{_started_at}:\n"
-                    f'"{self._pattern}"\n'
-                    f" {' ' * _started_at}^ here") from e
+                    f"Could not find '{ch}', searching ",
+                    self._pattern,
+                    _started_at) from e
 
     def _consume_till_next(
             self,
@@ -123,7 +133,7 @@ class _RegexFactory:
         return not self._is_escaped(at)
 
     @staticmethod
-    def _chars_from_char_class(class_specifier: str) -> set[str]:
+    def _chars_from_char_class(class_specifier: str) -> SignedSet[str]:
         """
         Produces the set of all chars that satisfy the given regular
         expression char. class specifier (see
@@ -137,10 +147,53 @@ class _RegexFactory:
         Returns:
             A set of all the conforming characters.
         """
-        # TODO: handle ;)
-        raise NotImplementedError()
-        # ranges:
-        # {chr(i) for i in range(ord(start), ord(end) + 1)}
+        result = SignedSet()
+        spec_len = len(class_specifier)
+        cur = 0
+        while cur < spec_len:
+            char: str | None = class_specifier[cur]
+            if char == '-':
+                raise PatternParseError("range with no start char",
+                                        class_specifier, cur)
+            if char == '\\':
+                cur += 1
+                if cur >= spec_len:
+                    raise PatternParseError("Incomplete escape sequence",
+                                            class_specifier, cur - 1)
+                char = class_specifier[cur]
+                match char:
+                    case '\\' | '-' | ']':
+                        pass
+                    case x if (x in _parser_symbols_escaped
+                               and isinstance(
+                                   _parser_symbols_escaped[x],
+                                   ConsumeAny)):
+                        # special ranges e.g. \d, \s
+                        result |= _parser_symbols_escaped[x].match_set
+                        # Do not handle further
+                        char = None
+                    case _:
+                        raise PatternParseError(
+                            "Invalid escape sequence",
+                            class_specifier, cur)
+            if cur + 1 < spec_len and class_specifier[cur + 1] == '-':
+                cur += 2
+                if char is None:
+                    raise PatternParseError(
+                        "range did not start with character",
+                        class_specifier, cur - 2)
+                if cur >= spec_len:
+                    raise PatternParseError("range with no end char",
+                                            class_specifier, cur - 1)
+                end_chr = class_specifier[cur]
+                # Add set of all chars in range
+                result |= SignedSet(
+                    {chr(i) for i in range(ord(char),
+                                           ord(end_chr) + 1)})
+            elif char is not None:
+                result.add(char)
+            cur += 1
+        return result
 
     def _connect_last(self):
         if self._last_token is not None:
