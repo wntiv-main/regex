@@ -228,6 +228,10 @@ class Regex:
         result |= other
         return result
 
+    def __neg__(self) -> 'Regex':
+        # TODO:
+        raise NotImplementedError()
+
     def is_in(self, input: str) -> bool:
         ctx = MatchConditions(input)
         state = self.start

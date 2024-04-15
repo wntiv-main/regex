@@ -235,15 +235,26 @@ class ParserPredicate(ABC):
 
     @abstractmethod
     def coverage(self) -> SignedSet[str]:
-        ...
+        raise NotImplementedError()
 
     @abstractmethod
     def __hash__(self) -> int:
-        ...
+        raise NotImplementedError()
+
+    @abstractmethod
+    def mutable_hash(self) -> int:
+        """
+        An alternative hash method that may change if the object is
+        mutated.
+
+        Returns:
+            The hash of the object.
+        """
+        raise NotImplementedError()
 
     @abstractmethod
     def __eq__(self, other: Any) -> bool:
-        ...
+        raise NotImplementedError()
 
     def _symbol(self) -> Optional[str]:
         # Trivial cases
@@ -257,11 +268,11 @@ class ParserPredicate(ABC):
 
     @abstractmethod
     def __str__(self) -> str:
-        ...
-        
+        raise NotImplementedError()
+
     @abstractmethod
     def copy(self) -> 'ParserPredicate':
-        ...
+        raise NotImplementedError()
 
 
 class GenericParserPredicate(ParserPredicate):
@@ -291,6 +302,7 @@ class GenericParserPredicate(ParserPredicate):
 
     def __hash__(self) -> int:
         return id(self._evaluate)
+    mutable_hash = __hash__
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, GenericParserPredicate):
@@ -331,6 +343,7 @@ class ConsumeString(ParserPredicate):
 
     def __hash__(self) -> int:
         return hash(self.match_string)
+    mutable_hash = __hash__
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, ConsumeString):
@@ -371,7 +384,15 @@ class ConsumeAny(ParserPredicate):
 
     def __hash__(self) -> int:
         # Lets not use hash in case of mutation :)
+        # Note this means that a == b does NOT imply hash(a) == hash(b)
+        # as is common expectation. lets hope noone notices :/
+        # Otherwise, we *could* implement a secondary .val_equals()
+        # method, but im lazy :P
         return id(self.match_set)
+
+    def mutable_hash(self) -> int:
+        # now we can use hash
+        return hash(self.match_set)
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, ConsumeAny):

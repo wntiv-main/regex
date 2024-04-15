@@ -209,6 +209,8 @@ class MultiFigureViewer:
         self._display()
 
     def _display(self):
+        if len(self._figures) < 1:
+            return
         if self._last_fig is not None:
             # Hacks, just hope this works
             self._last_fig.canvas.manager.window.close()

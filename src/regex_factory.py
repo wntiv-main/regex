@@ -162,13 +162,16 @@ class _RegexFactory:
                                             class_specifier, cur - 1)
                 char = class_specifier[cur]
                 match char:
-                    case '\\' | '-' | ']':
+                    #        Hello!     Hey.
+                    #           \       /
+                    case '\\' | '-' | '^' | ']':
                         pass
                     case x if (x in _parser_symbols_escaped
                                and isinstance(
                                    _parser_symbols_escaped[x],
                                    ConsumeAny)):
                         # special ranges e.g. \d, \s
+                        # not sure this is standard but its useful so...
                         result |= _parser_symbols_escaped[x].match_set
                         # Do not handle further
                         char = None

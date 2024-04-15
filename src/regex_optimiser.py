@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 from enum import IntEnum, IntFlag, auto
+import itertools
 from typing import Callable, Iterable, Self
 import weakref
 import regex as rx
@@ -121,6 +122,33 @@ class _optimise_regex(_MovingIndexHandler):
                 return False
         return True
 
+    @staticmethod
+    def _mutable_diff(first: set[ParserPredicate],
+                      second: set[ParserPredicate])\
+            -> set[ParserPredicate]:
+        result: dict[int, list[ParserPredicate]] = {}
+        for el in first:
+            el_hash = el.mutable_hash()
+            if el_hash in result:
+                result[el_hash].append(el)
+            else:
+                result[el.mutable_hash()] = [el]
+        for el in second:
+            el_hash = el.mutable_hash()
+            if el_hash in result:
+                # Dont need to iterate in reverse as we always leave
+                # after deleting a value
+                for i in range(len(result[el_hash])):
+                    if result[el_hash][i] == el:
+                        # Remove el that is in both first and second
+                        result[el_hash].pop(i)
+                        break
+                else:
+                    result[el_hash].append(el)
+            else:
+                result[el.mutable_hash()] = [el]
+        return set(itertools.chain.from_iterable(result.values()))
+
     def can_minify_outputs(self, s1: State, s2: State) -> bool:
         if s1 == s2 or (
             (s1 == self.regex.end or s2 == self.regex.end)
@@ -133,8 +161,9 @@ class _optimise_regex(_MovingIndexHandler):
             return False
         for i in range(self.regex.size):
             if i == s1 or i == s2:
-                diff = (self.regex.edge_map[s1, i]
-                        ^ self.regex.edge_map[s2, i])
+                diff = _optimise_regex._mutable_diff(
+                    self.regex.edge_map[s1, i],
+                    self.regex.edge_map[s2, i])
                 for edge in diff:
                     if edge != MatchConditions.epsilon_transition:
                         return False
@@ -149,7 +178,7 @@ class _optimise_regex(_MovingIndexHandler):
             i = self.todo.pop()
             if i.removed():
                 continue
-            print(i, self.todo)
+            print(i.value(), f"{{{', '.join(map(str, self.todo))}}}")
             # Remove redundant states
             if self.regex._remove_if_unreachable(i.value()):
                 self.remove(i)
@@ -209,10 +238,12 @@ class _optimise_regex(_MovingIndexHandler):
             self.regex.edge_map[start.value(), end.value()].remove(
                 MatchConditions.epsilon_transition)
             self.regex._merge_outputs(start.value(), end.value())
-            self.todo.add(self.index(start))
             if self.regex._remove_if_unreachable(end.value()):
                 self.remove(end)
+            else:
+                self.todo.add(self.index(end))
             self.regex._debug(f"e-closed {start} <- {end}")
+            end.reset_iteration()
         # elif (self.regex._num_inputs(j) == 1
         #       or self.regex._num_outputs(i) == 1):
         #     self.regex.edge_map[i, j].remove(
