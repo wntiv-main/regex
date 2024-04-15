@@ -6,7 +6,7 @@
 	"configurations": [
 		{
 			"name": "Python: Run Main",
-			"type": "python",
+			"type": "debugpy",
 			"request": "launch",
 			"program": "${workspaceFolder}/src/__main__.py",
 			"justMyCode": false,

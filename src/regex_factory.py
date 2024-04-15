@@ -2,6 +2,7 @@ from enum import IntEnum, auto
 from typing import Callable
 
 import regex as rx
+from regex_optimiser import _optimise_regex
 from regexutil import CaptureGroup, ConsumeAny, ConsumeString, \
     MatchConditions, ParserPredicate, SignedSet, _parser_symbols, \
     _parser_symbols_escaped
@@ -155,10 +156,10 @@ class _RegexFactory:
         if _nested == _NestedType.TOP:
             self._regex._debug("start")
             # Loop until can match
-            self._regex.connect(self._regex.start,
-                                self._regex.start,
-                                MatchConditions.consume_any)
-            self._regex._optimise()
+            # self._regex.connect(self._regex.start,
+            #                     self._regex.start,
+            #                     MatchConditions.consume_any)
+            _optimise_regex(self._regex)
         return self._regex
 
     def _parse_escaped(self, char: str) -> None:
@@ -168,7 +169,7 @@ class _RegexFactory:
             case ch if ch in _parser_symbols_escaped:
                 # if ch == 'A':
                 #     self._anchored = True
-                self._append(_parser_symbols_escaped[ch])
+                self._append(_parser_symbols_escaped[ch].copy())
             case (ch, _) if ch in "\\.^$+*?[]{}()":
                 self._append(ConsumeString(ch))
             case _:
@@ -184,7 +185,7 @@ class _RegexFactory:
         match char:
             # ^, $, ., etc...
             case ch if ch in _parser_symbols:
-                self._append(_parser_symbols[ch])
+                self._append(_parser_symbols[ch].copy())
             case '?':  # Make _last_token optional
                 self._last_token = self._last_token.optional()
             case '+':  # Repeat 1+ times quantifier

@@ -11,6 +11,9 @@ T = TypeVar("T")
 TArgs = TypeVarTuple("TArgs")
 
 
+State: TypeAlias = int
+
+
 class represented_by:
     _symbol: str
     _escaped: bool
@@ -351,7 +354,8 @@ class ConsumeAny(ParserPredicate):
         return ConsumeAny(-self.match_set)
 
     def __hash__(self) -> int:
-        return hash(self.match_set)
+        # Lets not use hash in case of mutation :)
+        return id(self.match_set)
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, ConsumeAny):
