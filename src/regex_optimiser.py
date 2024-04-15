@@ -8,14 +8,6 @@ import regex as rx
 from regexutil import ConsumeAny, ConsumeString, MatchConditions, ParserPredicate, SignedSet, State
 
 
-class _ActionType(IntFlag):
-    NONE = 0
-    DELETED_START = auto()
-    DELETED_END = auto()
-    MERGED_TO_START = auto()
-    MERGED_END_TO_START = DELETED_END | MERGED_TO_START
-
-
 class _MovingIndexHandler(ABC):
     _instances: weakref.WeakSet['_MovingIndex']
 
@@ -130,7 +122,14 @@ class _optimise_regex(_MovingIndexHandler):
         return True
 
     def can_minify_outputs(self, s1: State, s2: State) -> bool:
-        if s1 == s2 or s1 == self.regex.end or s2 == self.regex.end:
+        if s1 == s2 or (
+            (s1 == self.regex.end or s2 == self.regex.end)
+            and not MatchConditions.epsilon_transition in
+            self.regex.edge_map[
+                # NOT end state
+                self.regex.end ^ s1 ^ s2,
+                # end state
+                self.regex.end]):
             return False
         for i in range(self.regex.size):
             if i == s1 or i == s2:
@@ -242,9 +241,12 @@ class _optimise_regex(_MovingIndexHandler):
         if self.can_minify_outputs(s1.value(), s2.value()):
             if s2.value() == self.regex.start:
                 self.regex.start = s1.value()
+            if s2.value() == self.regex.end:
+                self.regex.end = s1.value()
             self.regex._merge_inputs(s1.value(), s2.value())
             self.regex._remove_state(s2.value())
-            # State removed, handle shifted indices
+            # Intended side-effect: will set s2's value to -1
+            # Which will reset the caller's loop
             self.remove(s2)
             self.regex._debug(f"merged {s2} -> {s1}")
         if self.can_minify_inputs(s1.value(), s2.value()):
@@ -253,7 +255,8 @@ class _optimise_regex(_MovingIndexHandler):
             self.regex._merge_outputs(s1.value(), s2.value())
             self.regex._remove_state(s2.value())
             self.todo.add(self.index(s1))
-            # State removed, handle shifted indices
+            # Intended side-effect: will set s2's value to -1
+            # Which will reset the caller's loop
             self.remove(s2)
             self.regex._debug(f"merged {s2} -> {s1}")
 
