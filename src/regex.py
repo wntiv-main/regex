@@ -194,8 +194,16 @@ class Regex:
         return result
 
     def __imul__(self, scalar: int) -> Self:
-        for _ in range(scalar):
-            self += self
+        if scalar == 0:
+            self.edge_map = Regex._empty_arr((1, 1))
+            self.start = self.end = 0
+        elif scalar > 0:
+            monomer = self.copy()
+            for _ in range(scalar - 1):
+                self += monomer
+        else:
+            raise ValueError(f"cannot multiply {self} by {scalar}")
+        return self
 
     def __mul__(self, scalar: int) -> Self:
         result = self.copy()

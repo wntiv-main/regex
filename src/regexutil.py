@@ -56,8 +56,12 @@ class SignedSet(Generic[T]):
         else:
             self._accept.discard(el)
 
-    def __neg__(self):
-        return SignedSet(self, True)
+    def negate(self) -> Self:
+        self._negate = not self._negate
+        return self
+
+    def __neg__(self) -> 'SignedSet':
+        return self.copy().negate()
 
     def __contains__(self, value: T):
         return (self._negate ^ (value in self._accept))

@@ -254,20 +254,68 @@ class _RegexFactory:
                 self._append(MatchConditions.epsilon_transition)
             case '[':  # Character class specifiers
                 negated = self._try_consume('^')
+                start_cur = self._cur
                 cls_specifier = self._consume_till_next(
                     ']', self._is_unescaped)
-                chars = SignedSet(
-                    self._chars_from_char_class(cls_specifier),
-                    negate=negated)
+                try:
+                    chars = self._chars_from_char_class(cls_specifier)
+                except PatternParseError as e:
+                    # Re-raise with context
+                    e.parse_src = self._pattern
+                    e.parse_idx += start_cur
+                    raise e
+                if negated:
+                    chars.negate()
                 self._append(ConsumeAny(chars))
             case '{':  # n-quantifier
-                quantity = self._consume_till_next('}', self._is_unescaped)
-                # TODO: handle ;)
-                # idea:
-                # for i in range(...):
-                #     self._append(self._last_token)
-                # idea 2: __mul__  or __imul__
-                raise NotImplementedError()
+                def parse_int(x: str) -> int | None:
+                    x = x.strip()
+                    if not x:  # null value
+                        return None
+                    if not x.isnumeric():
+                        raise PatternParseError(
+                            "Invalid n-quantifier numeral",
+                            self._pattern,
+                            self._pattern.index(x.strip(), self._cur))
+                    return int(x)
+                start_cur = self._cur
+                quantity = tuple(map(
+                    parse_int,
+                    self._consume_till_next('}', self._is_unescaped)
+                        .split(',')))
+                # Last value must be > 0
+                if quantity[-1] == 0:
+                    raise PatternParseError(
+                        "Invalid n-quantifier: max must be > 0",
+                        self._pattern, self._cur - 2)
+                # epsilon moves sandbox group and prevent loops escaping
+                self._last_token += MatchConditions.epsilon_transition
+                match quantity:
+                    case (int(n),):
+                        self._last_token *= n
+                    case (int(n), int(m)):
+                        if m > n:
+                            self._last_token = (
+                                self._last_token * n
+                                + self._last_token.optional() * (m - n))
+                        elif m == n:
+                            self._last_token *= n
+                        else:
+                            raise PatternParseError(
+                                "Invalid n-quantifier: max is smaller"
+                                " than min",
+                                self._pattern, start_cur)
+                    case (None | 0, int(m)):
+                        self._last_token = (
+                            self._last_token.optional() * m)
+                    case (int(n), None):
+                        self._last_token = (
+                            self._last_token * n
+                            + self._last_token.optional().repeated())
+                    case _:
+                        raise PatternParseError(
+                            "Invalid n-quantifier syntax",
+                            self._pattern, start_cur)
             case '(':  # group
                 start_pos = self._cur - 1
                 # Capture group time!
