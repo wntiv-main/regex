@@ -26,7 +26,7 @@ def main():
         print(f"{msg}:\n{rx}")
     Regex._debug_function = debug
     try:
-        rx = Regex(r"[aeiou]{3,}")
+        rx = Regex(r"[aeiou]{3,5}")
         print(rx)
         mfv.add(DebugGraphViewer(rx.edge_map,
                                  rx.start, rx.end).render())

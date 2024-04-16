@@ -1,7 +1,6 @@
 
 
 from abc import ABC, abstractmethod
-from enum import IntEnum, IntFlag, auto
 import itertools
 from typing import Callable, Iterable, Self
 import weakref
@@ -202,10 +201,14 @@ class _optimise_regex(_MovingIndexHandler):
                 # 1 * \
                 # 2 * * \
                 # 3 * * * \
-                # This means that any states added during the iteration will
-                # still be covered entirely
+                # This means that any states added during the iteration
+                # will still be covered entirely
                 for j in self.iterate(start=1):
+                    if not self.regex.edge_map[i.value(), j.value()]:
+                        continue  # fast-path for no edges
                     for k in self.iterate(end=j):
+                        if not self.regex.edge_map[i.value(), k.value()]:
+                            continue  # fast-path for no edges
                         self.powerset_construction(i, j, k)
                         if i.removed():
                             break
