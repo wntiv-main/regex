@@ -27,6 +27,7 @@ class TestCase:
         for case in TestCase._test_cases:
             case.run()
             print(case)
+            print()  # newline
 
     def __init__(self, description: str,
                  *, expected: str | None = None):

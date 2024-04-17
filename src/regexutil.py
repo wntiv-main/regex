@@ -254,7 +254,7 @@ class ParserPredicate(ABC):
         raise NotImplementedError()
 
     def kind_of_in(self, collection: Iterable['ParserPredicate'])\
-            -> 'ParserPredicate' | None:
+            -> 'ParserPredicate | None':
         """
         Returns the ParserPredicate instance in the collection that
         (soft) equals `self`. If there is none, returns None.

@@ -19,6 +19,7 @@ class NodeMatcher:
     _handler: 'assert_regex'
     _children: list[tuple[ParserPredicate, 'NodeMatcher']]
     _for: State | None
+    _evaluated: bool
     _type: RegexState
     _expected_type: RegexState
 
@@ -28,6 +29,7 @@ class NodeMatcher:
         self._handler = handler
         self._children = []
         self._for = None
+        self._evaluated = False
         self._type = state_type
         self._expected_type = RegexState.ANY
 
@@ -130,22 +132,25 @@ class NodeMatcher:
             return f"{joiner}{self._state_name()}."
         elif len(self._children) == 1:
             result = ""
-            if _top or _first:
+            if _top or _first or self._type != RegexState.ANY:
                 result = self._state_name()
-            result += f", followed by an {self._children[0][0]}-move"
+            result += f", followed by an {self._children[0][0]}-move "
             result += self._children[0][1]._msg(_visited, _indent)
             return result
         else:
             result = ""
             if not _top:
                 result = "to "
-            result += f"{self._state_name()}, followed by any of:"
+            result += f"{self._state_name()}, followed by:"
             for move, child in self._children:
                 result += (f"\n{'    ' * _indent}- an {move}-move to "
                            f"{child._msg(_visited, _indent + 1, True)}")
             return result
 
     def _evaluate(self, _taken: set[State]):
+        if self._evaluated:
+            return  # Already been visited
+        self._evaluated = True
         match self._expected_type:
             case RegexState.END:
                 if self._for != self._handler._regex.end:
@@ -200,6 +205,7 @@ class assert_regex(TestCase):
 
     _pattern: str
     _regex: Regex | None
+    _debug_regex: Regex | None
     _start: NodeMatcher
     _end: NodeMatcher
 
@@ -213,6 +219,7 @@ class assert_regex(TestCase):
     def _call(self):
         # Initialize _regex here so errors are catched by test
         self._regex = Regex(self._pattern)
+        self._debug_regex = self._regex.copy()
         self._callable(self._start)
         self.set_expected(
             f"Expected a DFA to be produced with "
@@ -225,9 +232,9 @@ class assert_regex(TestCase):
             f"{self._start._msg([], _first=True)}")
 
     def on_fail(self):
-        fig = DebugGraphViewer(self._regex.edge_map,
-                               self._regex.start,
-                               self._regex.end).render()
+        fig = DebugGraphViewer(self._debug_regex.edge_map,
+                               self._debug_regex.start,
+                               self._debug_regex.end).render()
         fig.suptitle(self._response, fontsize=8)
         fig.canvas.manager.set_window_title(
             f"{self._callable.__name__}: {self._description}")
