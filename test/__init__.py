@@ -38,4 +38,5 @@ def test_not_class(start: NodeMatcher):
 
 def run_tests():
     TestCase.run_cases()
+    TestCase.copy_html(TestCase.produce_html_printout())
     assert_regex._failed_regex.display()

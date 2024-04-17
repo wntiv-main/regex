@@ -29,6 +29,72 @@ class TestCase:
             print(case)
             print()  # newline
 
+    @staticmethod
+    def produce_html_printout() -> str:
+        result = ("<table><th><td>Test</td><td>Expected</td>"
+                  "<td>Actual</td><td>Result</td></th>")
+        for case in TestCase._test_cases:
+            test_name = (case._callable.__name__
+                         .replace('_', ' ').capitalize())
+            result += (f"<tr><td>{test_name}: {case._description}</td>"
+                       f"<td>{case._expected}</td>"
+                       f"<td>{case._response}</td>"
+                       f"<td>{case._result.name}</td></tr>")
+        result += "</table>"
+        return result
+
+    @staticmethod
+    def copy_html(
+            content: str, *,
+            _HTML_PREFIX="<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 "
+            "Transitional//EN\"><HTML><HEAD></HEAD><BODY>"
+            "<!--StartFragment-->",
+            _HTML_SUFFIX="<!--EndFragment--></BODY></HTML>",
+            _MARKER="Version:1.0\r\n"
+        "StartHTML:%09d\r\n"
+        "EndHTML:%09d\r\n"
+        "StartFragment:%09d\r\n"
+        "EndFragment:%09d\r\n"
+        "StartSelection:%09d\r\n"
+        "EndSelection:%09d\r\n"
+        "SourceURL:%s\r\n",
+            _CF_HTML=[]):
+        # Adapted from https://stackoverflow.com/questions/55698762/how-to-copy-html-code-to-clipboard-using-python
+        """
+        Cursed function to copy HTML content to the user's clipboard
+
+        Arguments:
+            content -- The HTML content to copy.
+        """
+        try:
+            import win32clipboard
+        except ImportError:
+            print("WARNING: `pip install pywin32` is needed to copy "
+                  "HTML output.")
+            return
+        if not _CF_HTML:
+            _CF_HTML.append(win32clipboard
+                            .RegisterClipboardFormat("HTML Format"))
+        html = _HTML_PREFIX + content + _HTML_SUFFIX
+        fragStart = len(_HTML_PREFIX)
+        fragEnd = len(_HTML_PREFIX) + len(content)
+        try:
+            win32clipboard.OpenClipboard(0)
+            win32clipboard.EmptyClipboard()
+            # How long is the prefix going to be?
+            dummyPrefix = _MARKER % (0, 0, 0, 0, 0, 0, "file://null")
+            lenPrefix = len(dummyPrefix)
+            prefix = _MARKER % (lenPrefix, len(html)+lenPrefix,
+                                fragStart+lenPrefix, fragEnd+lenPrefix,
+                                fragStart+lenPrefix, fragEnd+lenPrefix,
+                                "file://null")
+            src = (prefix + html).encode("UTF-8")
+            # print(src)
+            win32clipboard.SetClipboardData(_CF_HTML[0], src)
+        finally:
+            win32clipboard.CloseClipboard()
+
+
     def __init__(self, description: str,
                  *, expected: str | None = None):
         self._description = description
