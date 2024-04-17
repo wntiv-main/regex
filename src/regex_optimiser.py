@@ -32,15 +32,11 @@ class _MovingIndexHandler(ABC):
     def remove(self, index: 'int | _MovingIndex') -> None:
         if isinstance(index, _MovingIndex):
             index = index.value()
-        to_remove: set[_MovingIndex] = set()
         for inst in self._instances:
             if inst.value() > index:
                 inst._internal_index -= 1
             elif inst.value() == index:
                 inst._internal_index = -1
-                to_remove.add(inst)
-        self._instances -= to_remove
-        print(f"{{TODO: {', '.join(map(str, self.todo))}}}")
 
     def iterate(self, *,
                 start: int = 0,
