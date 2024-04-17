@@ -31,8 +31,8 @@ class TestCase:
 
     @staticmethod
     def produce_html_printout() -> str:
-        result = ("<table><th><td>Test</td><td>Expected</td>"
-                  "<td>Actual</td><td>Result</td></th>")
+        result = ("<table><tr><th>Test</th><th>Expected</th>"
+                  "<th>Actual</th><th>Result</th></tr>")
         for case in TestCase._test_cases:
             test_name = (case._callable.__name__
                          .replace('_', ' ').capitalize())
