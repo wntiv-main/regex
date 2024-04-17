@@ -1,11 +1,11 @@
 from enum import IntEnum, auto
-from typing import Self
+from typing import Callable, Self
 
 from src.debug_graph_viewer import DebugGraphViewer, MultiFigureViewer
 from src import Regex
 from src.regexutil import ConsumeAny, ConsumeString, ParserPredicate, SignedSet, State
-from .test import TestCase
-from .test_error import EdgeNotFoundError, ExtraEdgesError, StateIdentityError
+from .test import TestCase, TestType
+from .test_error import EdgeNotFoundError, ExtraEdgesError, RegexMatchError, StateIdentityError
 
 
 class RegexState(IntEnum):
@@ -16,7 +16,7 @@ class RegexState(IntEnum):
 
 
 class NodeMatcher:
-    _handler: 'assert_regex'
+    _handler: 'TestRegexShape'
     _children: list[tuple[ParserPredicate, 'NodeMatcher']]
     _for: State | None
     _evaluated: bool
@@ -24,7 +24,7 @@ class NodeMatcher:
     _expected_type: RegexState
 
     def __init__(self,
-                 handler: 'assert_regex',
+                 handler: 'TestRegexShape',
                  state_type: RegexState = RegexState.ANY):
         self._handler = handler
         self._children = []
@@ -60,6 +60,15 @@ class NodeMatcher:
                     to: 'NodeMatcher | RegexState' = RegexState.ANY)\
             -> 'NodeMatcher':
         return self.has(ConsumeString(literal_match), to)
+
+    def has_literal_chain(self, literal_chain: str,
+                          to: 'NodeMatcher | RegexState'
+                          = RegexState.ANY) -> 'NodeMatcher':
+        last = self
+        # Skip last in loop to pass `to` arg
+        for char in literal_chain[:-1]:
+            last = last.has_literal(char)
+        return last.has_literal(literal_chain[-1], to)
 
     def has_any(self, of: str,
                 to: 'NodeMatcher | RegexState' = RegexState.ANY)\
@@ -105,7 +114,8 @@ class NodeMatcher:
              _visited: list['NodeMatcher'],
              _indent: int = 0,
              _top: bool = False,
-             _first: bool = False) -> str:
+             _first: bool = False,
+             *, _TAB="\t") -> str:
         if self in _visited:
             if self._type == RegexState.END:
                 return "to the end state."
@@ -114,12 +124,14 @@ class NodeMatcher:
             left_idx = _visited.index(self)
             right_idx = len(_visited) - left_idx
             relative_pos: str
-            if right_idx == 0:
+            if right_idx == 1:
+                relative_pos = "current"
+            elif right_idx == 2:
                 relative_pos = "previous"
             elif left_idx == 0:
                 relative_pos = "start"
             elif left_idx > right_idx:
-                relative_pos = (NodeMatcher._num_w_ending(right_idx + 1)
+                relative_pos = (NodeMatcher._num_w_ending(right_idx - 1)
                                 + " previous")
             else:
                 relative_pos = NodeMatcher._num_w_ending(left_idx + 1)
@@ -143,7 +155,7 @@ class NodeMatcher:
                 result = "to "
             result += f"{self._state_name()}, followed by:"
             for move, child in self._children:
-                result += (f"\n{'    ' * _indent}- an {move}-move to "
+                result += (f"\n{_TAB * _indent}->  an {move}-move to "
                            f"{child._msg(_visited, _indent + 1, True)}")
             return result
 
@@ -200,7 +212,7 @@ class NodeMatcher:
 
 
 # functional-like interface
-class assert_regex(TestCase):
+class TestRegexShape(TestCase):
     _failed_regex: MultiFigureViewer = MultiFigureViewer()
 
     _pattern: str
@@ -209,12 +221,14 @@ class assert_regex(TestCase):
     _start: NodeMatcher
     _end: NodeMatcher
 
-    def __init__(self, pattern: str) -> None:
+    def __init__(self, pattern: str,
+                 test_type: TestType = TestType.PASSING):
         self._start = NodeMatcher(self, RegexState.START)
         self._end = NodeMatcher(self, RegexState.END)
         self._pattern = pattern
-        super().__init__(f"Trying to construct a regular expression "
-                         f"from `{pattern}`.")
+        super().__init__(
+            test_type,
+            f"Trying to construct regular expression from `{pattern}`")
 
     def _call(self):
         # Initialize _regex here so errors are catched by test
@@ -235,10 +249,10 @@ class assert_regex(TestCase):
         fig = DebugGraphViewer(self._debug_regex.edge_map,
                                self._debug_regex.start,
                                self._debug_regex.end).render()
-        fig.suptitle(self._response, fontsize=8)
+        fig.suptitle(self._outcome, fontsize=8)
         fig.canvas.manager.set_window_title(
             f"{self._callable.__name__}: {self._description}")
-        assert_regex._failed_regex.add(fig)
+        TestRegexShape._failed_regex.add(fig)
 
     def __exit__(self, *exc):
         return super().__exit__(*exc)
@@ -246,4 +260,41 @@ class assert_regex(TestCase):
     def _evaluate(self):
         self._start._for = self._regex.start
         self._end._for = self._regex.end
-        self._start._evaluate([])
+        self._start._evaluate(set())
+
+
+class TestRegexMatches(TestCase):
+    _pattern: str
+    _regex: Regex | None
+    _expected_matches: set[str]
+    _unexpected_matches: set[str]
+
+    def __init__(self, pattern: str,
+                 test_type: TestType = TestType.PASSING):
+        super().__init__(test_type, f"Testing matches for `{pattern}`")
+        self._pattern = pattern
+        # Defer initialization for error capture
+        self._regex = None
+        self._expected_matches = set()
+        self._unexpected_matches = set()
+
+    def _call(self) -> None:
+        self._callable(self)
+        self.set_expected(f"Expected {self._expected_matches} to all "
+                          f"match, and {self._unexpected_matches} to "
+                          f"all not match.")
+        self._regex = Regex(self._pattern)
+        for test in self._expected_matches:
+            if not self._regex.is_in(test):
+                raise RegexMatchError(self._regex, test, True)
+        for test in self._unexpected_matches:
+            if self._regex.is_in(test):
+                raise RegexMatchError(self._regex, test, False)
+
+    def assert_matches(self, *tests: str) -> None:
+        for test in tests:
+            self._expected_matches.add(test)
+
+    def assert_doesnt_match(self, *tests: str) -> None:
+        for test in tests:
+            self._unexpected_matches.add(test)

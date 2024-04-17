@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+from src import Regex
 from src.regexutil import ParserPredicate, State
 from . import regex_matcher
 
@@ -18,11 +19,11 @@ class TestError(Exception, ABC):
                 f"{self.__cause__}")
 
 
-class RegexTestError(TestError):
+class RegexBuildError(TestError):
     pass
 
 
-class StateIdentityError(RegexTestError):
+class StateIdentityError(RegexBuildError):
     _state: 'regex_matcher.NodeMatcher'
     _attempted_state: 'regex_matcher.RegexState'
 
@@ -46,7 +47,7 @@ class StateIdentityError(RegexTestError):
         return f"State {self._state._for} was not {state_name}."
 
 
-class EdgeNotFoundError(RegexTestError):
+class EdgeNotFoundError(RegexBuildError):
     _start_state: 'regex_matcher.NodeMatcher'
     _end_state: State | None
     _expected_edge: ParserPredicate
@@ -69,7 +70,7 @@ class EdgeNotFoundError(RegexTestError):
         return result
 
 
-class ExtraEdgesError(RegexTestError):
+class ExtraEdgesError(RegexBuildError):
     _start_state: 'regex_matcher.NodeMatcher'
     _extras: dict[State, list[ParserPredicate]]
 
@@ -88,3 +89,23 @@ class ExtraEdgesError(RegexTestError):
                 f"\n- {', '.join(map(lambda x: f'{x}-move', edges))} "
                 f"to state {state}")
         return result
+
+
+class RegexMatchError(TestError):
+    _regex: Regex
+    _match: str
+    _should_match: bool
+
+    def __init__(self,
+                 regex: Regex,
+                 match: str,
+                 should_match: bool):
+        super().__init__(regex, match, should_match)
+        self._regex = regex
+        self._match = match
+        self._should_match = should_match
+
+    def outcome_message(self, *, _nt="n't") -> str:
+        return (f"'{self._match}' "
+                f"did{_nt if self._should_match else ''} match the "
+                f"regular expression.")
