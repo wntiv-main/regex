@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 import functools
 from typing import Any, Callable, Generic, Iterable, Optional, Self, TypeAlias, TypeVar, TypeVarTuple, overload
-from funcutil import _hash_set
+
+from .funcutil import _hash_set
 
 
 _parser_symbols: dict[str, 'ParserPredicate'] = {}

@@ -5,10 +5,17 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"name": "Python: Run Main",
+			"name": "Python: Run Tests",
 			"type": "debugpy",
 			"request": "launch",
-			"program": "${workspaceFolder}/src/__main__.py",
+			"program": "${workspaceFolder}/__init__.py",
+			"console": "integratedTerminal"
+		},
+		{
+			"name": "Python: Run Playground",
+			"type": "debugpy",
+			"request": "launch",
+			"program": "${workspaceFolder}/playground.py",
 			"justMyCode": false,
 			"console": "integratedTerminal"
 		}

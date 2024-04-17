@@ -1,11 +1,10 @@
-
-
 from abc import ABC, abstractmethod
 import itertools
 from typing import Callable, Iterable, Self
 import weakref
-import regex as rx
-from regexutil import ConsumeAny, ConsumeString, MatchConditions, ParserPredicate, SignedSet, State
+
+import src as rx  # Type annotating
+from .regexutil import ConsumeAny, ConsumeString, MatchConditions, ParserPredicate, SignedSet, State
 
 
 class _MovingIndexHandler(ABC):
@@ -41,6 +40,7 @@ class _MovingIndexHandler(ABC):
                 inst._internal_index = -1
                 to_remove.add(inst)
         self._instances -= to_remove
+        print(f"{{TODO: {', '.join(map(str, self.todo))}}}")
 
     def iterate(self, *,
                 start: int = 0,
@@ -283,7 +283,7 @@ class _optimise_regex(_MovingIndexHandler):
             # Which will reset the caller's loop
             self.remove(s2)
             self.regex._debug(f"merged {s2} -> {s1}")
-        if self.can_minify_inputs(s1.value(), s2.value()):
+        elif self.can_minify_inputs(s1.value(), s2.value()):
             if s2.value() == self.regex.end:
                 self.regex.end = s1.value()
             self.regex._merge_outputs(s1.value(), s2.value())

@@ -1,9 +1,9 @@
 from enum import IntEnum, auto
 from typing import Callable
 
-import regex as rx
-from regex_optimiser import _optimise_regex
-from regexutil import CaptureGroup, ConsumeAny, ConsumeString, \
+import src as rx  # type annotating
+from .regex_optimiser import _optimise_regex
+from .regexutil import CaptureGroup, ConsumeAny, ConsumeString, \
     MatchConditions, ParserPredicate, SignedSet, _parser_symbols, \
     _parser_symbols_escaped
 

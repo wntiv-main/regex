@@ -15,7 +15,7 @@ except ImportError:
           "`$ pip install networkx`, `$ pip install matplotlib`, "
           "`$ pip install pyqt5`, and `$ pip install scipy`")
     quit()
-import networkx_curved_label
+from . import networkx_curved_label
 
 T = TypeVar('T')
 
