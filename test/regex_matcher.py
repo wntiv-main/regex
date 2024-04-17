@@ -85,6 +85,7 @@ class NodeMatcher:
             case NodeMatcher() as x:
                 next = x
         self._children.append((edge, next))
+        return next
 
     @staticmethod
     def _num_ending(num: int, *,
@@ -96,7 +97,7 @@ class NodeMatcher:
 
     @staticmethod
     def _num_w_ending(num: int) -> str:
-        return f"{num}{NodeMatcher._num_ending}"
+        return f"{num}{NodeMatcher._num_ending(num)}"
 
     def _msg(self,
              _visited: list['NodeMatcher'],
@@ -104,6 +105,10 @@ class NodeMatcher:
              _top: bool = False,
              _first: bool = False) -> str:
         if self in _visited:
+            if self._type == RegexState.END:
+                return "to the end state."
+            if self._type == RegexState.START:
+                return "to the start state."
             left_idx = _visited.index(self)
             right_idx = len(_visited) - left_idx
             relative_pos: str
@@ -154,9 +159,12 @@ class NodeMatcher:
                 match child._type:
                     case RegexState.ANY:
                         for state in range(self._handler._regex.size):
-                            if state in _taken:
+                            if (state in _taken
+                                or state == self._handler._regex.start
+                                    or state == self._handler._regex.end):
+                                # State already has NodeMatcher
                                 continue
-                            if edge in (self._handler._regex
+                            if edge.kind_of_in(self._handler._regex
                                         .edge_map[self._for, state]):
                                 child._for = state
                                 _taken.add(state)
@@ -169,11 +177,14 @@ class NodeMatcher:
                         child._for = self._handler._regex.end
                     case _:
                         raise NotImplementedError()
-            if not edge in self._handler._regex.edge_map[self._for,
-                                                         child._for]:
+            # cursedness since ParserPredicates are mutable
+            found_edge = edge.kind_of_in(self._handler._regex.edge_map[
+                self._for, child._for])
+            if found_edge is None:
+                # Connection not found
                 raise EdgeNotFoundError(self, edge, child._for)
             self._handler._regex.edge_map[
-                self._for, child._for].remove(edge)
+                self._for, child._for].remove(found_edge)
             child._evaluate(_taken)
         if self._handler._regex.edge_map[self._for, :].any():
             extras = {
@@ -225,8 +236,7 @@ class assert_regex(TestCase):
     def __exit__(self, *exc):
         return super().__exit__(*exc)
 
-    def _evaluate(self, regex: Regex):
-        self._regex = regex
+    def _evaluate(self):
         self._start._for = self._regex.start
         self._end._for = self._regex.end
-        self._start._evaluate()
+        self._start._evaluate([])

@@ -173,7 +173,6 @@ class _optimise_regex(_MovingIndexHandler):
             i = self.todo.pop()
             if i.removed():
                 continue
-            print(i.value(), f"{{{', '.join(map(str, self.todo))}}}")
             # Remove redundant states
             if self.regex._remove_if_unreachable(i.value()):
                 self.remove(i)
