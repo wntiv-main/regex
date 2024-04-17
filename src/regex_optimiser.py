@@ -242,17 +242,6 @@ class _optimise_regex(_MovingIndexHandler):
                 self.todo.add(self.index(end))
             self.regex._debug(f"e-closed {start} <- {end}")
             end.reset_iteration()
-        # elif (self.regex._num_inputs(j) == 1
-        #       or self.regex._num_outputs(i) == 1):
-        #     self.regex.edge_map[i, j].remove(
-        #         MatchConditions.epsilon_transition)
-        #     self.regex._merge(j, i)
-        #     self.regex._remove_state(i)
-        #     shift_todo(i)
-        #     self.regex._debug(f"e-closed inputs {j} <- {i}")
-        #     # Deleted `i` state, goto next `i` state
-        #     countinue_outer_loop = True
-        #     break
 
         # self.regex.edge_map[start, end].remove(
         #     MatchConditions.epsilon_transition)
@@ -300,11 +289,13 @@ class _optimise_regex(_MovingIndexHandler):
                     and out1.value() != self.regex.end):
                 # Unless e-move to end, retry
                 self.todo.add(self.index(state))
-            return
+                return
         row_coverage = SignedSet.union(
-            *map(lambda x: x.coverage(), row_set))
+            *(x.coverage() for x in row_set
+              if x != MatchConditions.epsilon_transition))
         column_coverage = SignedSet.union(
-            *map(lambda x: x.coverage(), column_set))
+            *(x.coverage() for x in column_set
+              if x != MatchConditions.epsilon_transition))
         intersection = row_coverage & column_coverage
         if not intersection:
             return  # No overlap, exit early
@@ -321,6 +312,8 @@ class _optimise_regex(_MovingIndexHandler):
                     if edge.match_string in intersection:
                         row_set.discard(edge)
                         column_set.discard(edge)
+                case MatchConditions.epsilon_transition:
+                    pass
                 case _:
                     raise NotImplementedError()
         # States were changed, check again
