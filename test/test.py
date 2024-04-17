@@ -75,7 +75,7 @@ def _copy_html(
 
 
 class TestCase:
-    _test_cases: set['TestCase'] = set()
+    _test_cases: list['TestCase'] = list()
 
     _callable: Callable[..., None]
     _type: TestType
@@ -95,17 +95,17 @@ class TestCase:
                               "<th>Expected</th><th>Outcome</th>"
                               "<th>Result</th></tr>"
                    for test_type in TestType}
-        counter = 0
+        counters = {test_type: 0 for test_type in TestType}
         for case in TestCase._test_cases:
             test_name = (case._callable.__name__
                          .replace('_', ' ').capitalize())
             results[case._type] += (
-                f"<tr><td>{counter}</td>"
+                f"<tr><td>{counters[case._type]}</td>"
                 f"<td>{test_name}: {case._description}</td>"
                 f"<td>{_htmlify(case._expected)}</td>"
                 f"<td>{_htmlify(case._outcome)}</td>"
                 f"<td>{case._result.name}</td></tr>")
-            counter += 1
+            counters[case._type] += 1
         return "<br/>".join((f"<h1>{test_type.name}</h1><br/>"
                              f"<table>{results[test_type]}</table><br/>"
                              for test_type in TestType))
@@ -127,7 +127,7 @@ class TestCase:
     # For use as decorator
     def __call__(self, func: Callable[[Self], None]) -> None:
         self._callable = func
-        TestCase._test_cases.add(self)
+        TestCase._test_cases.append(self)
 
     def _call(self):
         self._callable(self)
