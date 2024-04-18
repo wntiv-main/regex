@@ -232,6 +232,9 @@ class Regex:
         # TODO:
         raise NotImplementedError()
 
+    def __bool__(self) -> bool:
+        return self.size > 1 or bool(self.edge_map[0, 0])
+
     def is_in(self, input: str) -> bool:
         ctx = MatchConditions(input)
         state = self.start

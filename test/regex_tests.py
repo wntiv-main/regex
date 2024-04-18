@@ -3,8 +3,9 @@ from typing import Callable, Self
 
 from src.debug_graph_viewer import DebugGraphViewer, MultiFigureViewer
 from src import Regex
+from src.regex_factory import PatternParseError
 from src.regexutil import ConsumeAny, ConsumeString, ParserPredicate, SignedSet, State
-from .test import TestCase, TestType
+from .test import AssertRaises, ResultType, TestCase, TestType
 from .test_error import EdgeNotFoundError, ExtraEdgesError, RegexMatchError, StateIdentityError
 
 
@@ -114,7 +115,6 @@ class NodeMatcher:
              _visited: list['NodeMatcher'],
              _indent: int = 0,
              _top: bool = False,
-             _first: bool = False,
              *, _TAB="\t") -> str:
         if self in _visited:
             if self._type == RegexState.END:
@@ -140,23 +140,25 @@ class NodeMatcher:
         if len(self._children) == 0:
             joiner = ""
             if not _top:
-                joiner = "to "
+                joiner = " to "
             return f"{joiner}{self._state_name()}."
         elif len(self._children) == 1:
             result = ""
-            if _top or _first or self._type != RegexState.ANY:
+            if _top or self._type != RegexState.ANY:
                 result = self._state_name()
-            result += f", followed by an {self._children[0][0]}-move "
+            result += f", followed by an {self._children[0][0]}-move"
             result += self._children[0][1]._msg(_visited, _indent)
             return result
         else:
             result = ""
             if not _top:
-                result = "to "
-            result += f"{self._state_name()}, followed by:"
+                result = " to "
+            result += f"{self._state_name()}, followed by:<ul>"
             for move, child in self._children:
-                result += (f"\n{_TAB * _indent}->  an {move}-move to "
-                           f"{child._msg(_visited, _indent + 1, True)}")
+                result += (f"<li>an {move}-move to "
+                           f"{child._msg(_visited, _indent + 1, True)}"
+                           f"</li>")
+            result += "</ul>"
             return result
 
     def _evaluate(self, _taken: set[State]):
@@ -182,7 +184,7 @@ class NodeMatcher:
                                 # State already has NodeMatcher
                                 continue
                             if edge.kind_of_in(self._handler._regex
-                                        .edge_map[self._for, state]):
+                                               .edge_map[self._for, state]):
                                 child._for = state
                                 _taken.add(state)
                                 break
@@ -220,6 +222,7 @@ class TestRegexShape(TestCase):
     _debug_regex: Regex | None
     _start: NodeMatcher
     _end: NodeMatcher
+    _callable: Callable[[NodeMatcher], None]
 
     def __init__(self, pattern: str,
                  test_type: TestType = TestType.PASSING):
@@ -230,32 +233,35 @@ class TestRegexShape(TestCase):
             test_type,
             f"Trying to construct regular expression from `{pattern}`")
 
-    def _call(self):
+    # For use as decorator
+    def __call__(self, func: Callable[[NodeMatcher], None]) -> None:
+        self._callable = func
+        self._description = (f"{func.__name__.replace('_', ' ')}: "
+                             f"{self._description}")
+
+    def _inner_test(self):
         # Initialize _regex here so errors are catched by test
         self._regex = Regex(self._pattern)
         self._debug_regex = self._regex.copy()
         self._callable(self._start)
         self.set_expected(
             f"Expected a DFA to be produced with "
-            f"{self._start._msg([], _first=True)}")
+            f"{self._start._msg([], _top=True)}")
         self._evaluate()
-
-    def on_success(self):
-        self.set_response(
+        self.set_outcome(
             f"Produced a DFA with "
-            f"{self._start._msg([], _first=True)}")
+            f"{self._start._msg([], _top=True)}")
 
-    def on_fail(self):
-        fig = DebugGraphViewer(self._debug_regex.edge_map,
-                               self._debug_regex.start,
-                               self._debug_regex.end).render()
-        fig.suptitle(self._outcome, fontsize=8)
-        fig.canvas.manager.set_window_title(
-            f"{self._callable.__name__}: {self._description}")
-        TestRegexShape._failed_regex.add(fig)
-
-    def __exit__(self, *exc):
-        return super().__exit__(*exc)
+    def run(self):
+        super().run()
+        if self._result == ResultType.FAIL:
+            fig = DebugGraphViewer(self._debug_regex.edge_map,
+                                   self._debug_regex.start,
+                                   self._debug_regex.end).render()
+            fig.suptitle(self._outcome, fontsize=8)
+            fig.canvas.manager.set_window_title(
+                f"{self._callable.__name__}: {self._description}")
+            TestRegexShape._failed_regex.add(fig)
 
     def _evaluate(self):
         self._start._for = self._regex.start
@@ -278,8 +284,7 @@ class TestRegexMatches(TestCase):
         self._expected_matches = set()
         self._unexpected_matches = set()
 
-    def _call(self) -> None:
-        self._callable(self)
+    def _inner_test(self) -> None:
         self.set_expected(f"Expected {self._expected_matches} to all "
                           f"match, and {self._unexpected_matches} to "
                           f"all not match.")
@@ -291,10 +296,46 @@ class TestRegexMatches(TestCase):
             if self._regex.is_in(test):
                 raise RegexMatchError(self._regex, test, False)
 
-    def assert_matches(self, *tests: str) -> None:
+    def assert_matches(self, *tests: str) -> Self:
         for test in tests:
             self._expected_matches.add(test)
+        return self
 
-    def assert_doesnt_match(self, *tests: str) -> None:
+    def assert_doesnt_match(self, *tests: str) -> Self:
         for test in tests:
             self._unexpected_matches.add(test)
+        return self
+
+
+class TestNoParseError(TestCase):
+    _pattern: str
+
+    def __init__(self, pattern: str,
+                 test_type: TestType = TestType.ERROR):
+        super().__init__(
+            test_type,
+            f"Building regular expression from valid pattern "
+            f"`{pattern}`",
+            expected=f"Pattern to be parsed with no exceptions.")
+        self._pattern = pattern
+        self._callable = Regex
+
+    def _inner_test(self) -> None:
+        Regex(self._pattern)
+
+
+class TestParseError(AssertRaises):
+    _pattern: str
+
+    def __init__(self, pattern: str,
+                 test_type: TestType = TestType.ERROR):
+        super().__init__(
+            PatternParseError,
+            f"Building regular expression from invalid pattern "
+            f"`{pattern}`",
+            test_type)
+        self._pattern = pattern
+        self._callable = Regex
+
+    def _inner_test(self) -> None:
+        return super()._inner_test(self._pattern)

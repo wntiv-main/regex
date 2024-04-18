@@ -95,7 +95,7 @@ class _RegexFactory:
                 '>': '<'
             }):
         if _started_at is None:
-            _started_at = self._cur
+            _started_at = self._cur - 1
         try:
             current_attempt = self._pattern.index(ch, self._cur)
             while not predicate(current_attempt):
@@ -203,6 +203,12 @@ class _RegexFactory:
             self._regex += self._last_token
             self._last_token = None
 
+    def _require_previous(self):
+        if self._last_token is None:
+            raise PatternParseError(
+                f"'{self._pattern[self._cur - 1]}' must be preceded by"
+                f" another token", self._pattern, self._cur - 1)
+
     def build(self, *, _nested: _NestedType = _NestedType.TOP) \
             -> 'rx.Regex':
         while self._cur < len(self._pattern):
@@ -243,8 +249,10 @@ class _RegexFactory:
             case ch if ch in _parser_symbols:
                 self._append(_parser_symbols[ch].copy())
             case '?':  # Make _last_token optional
+                self._require_previous()
                 self._last_token = self._last_token.optional()
             case '+':  # Repeat 1+ times quantifier
+                self._require_previous()
                 self._last_token = self._last_token.repeated()
                 # sandbox to prevend out-of-order-ing sequenced loops
                 # TODO: is this neccesary??
@@ -252,6 +260,7 @@ class _RegexFactory:
                 # here again, thinking it still is
                 self._append(MatchConditions.epsilon_transition)
             case '*':  # Repeat 0+ times quantifier
+                self._require_previous()
                 self._last_token = self._last_token.optional().repeated()
                 # see above
                 self._append(MatchConditions.epsilon_transition)
@@ -271,6 +280,10 @@ class _RegexFactory:
                     chars.negate()
                 self._append(ConsumeAny(chars))
             case '{':  # n-quantifier
+                self._require_previous()
+                start_cur = self._cur
+                quantity_str = self._consume_till_next(
+                    '}', self._is_unescaped)
                 def parse_int(x: str) -> int | None:
                     x = x.strip()
                     if not x:  # null value
@@ -279,13 +292,19 @@ class _RegexFactory:
                         raise PatternParseError(
                             "Invalid n-quantifier numeral",
                             self._pattern,
-                            self._pattern.index(x.strip(), self._cur))
+                            start_cur + quantity_str.index(x.strip()))
                     return int(x)
-                start_cur = self._cur
                 quantity = tuple(map(
                     parse_int,
-                    self._consume_till_next('}', self._is_unescaped)
-                        .split(',')))
+                    quantity_str.split(',')))
+                if len(quantity) > 2:
+                    raise PatternParseError(
+                        "Invalid n-quantifier: should have no more than"
+                        " two values",
+                        self._pattern,
+                        # Index of second comma
+                        start_cur + quantity_str.index(
+                            ',', quantity_str.index(',') + 1))
                 # Last value must be > 0
                 if quantity[-1] == 0:
                     raise PatternParseError(
@@ -321,7 +340,7 @@ class _RegexFactory:
                             self._pattern, start_cur)
             case '(':  # group
                 start_pos = self._cur - 1
-                # Capture group time!
+                # TODO: Capture group time!
                 capture_group: CaptureGroup | None = None
                 if self._try_consume("?:"):
                     # Non-capturing group
@@ -356,13 +375,17 @@ class _RegexFactory:
                                         _started_at=self._cursor_started)
             case ')':
                 if nested != _NestedType.NESTED_GROUP:
-                    # TODO: error message
-                    raise PatternParseError("Unopened bracket")
+                    raise PatternParseError(
+                        f"Unopened '{char}'",
+                        self._pattern, self._cur - 1)
                 # Exit parse loop early, jump to outer group
                 return True
             case '}' | ']':
-                raise PatternParseError("Unopened bracket")
+                raise PatternParseError(
+                    f"Unopened '{char}'",
+                    self._pattern, self._cur - 1)
             case '|':  # or
+                start_cur = self._cur - 1
                 # TODO: is this safe?
                 # Parse RHS of expression
                 rh_builder = _RegexFactory(
@@ -376,6 +399,10 @@ class _RegexFactory:
                              if nested == _NestedType.TOP else nested)
                 rh_group = rh_builder.build(_nested=nest_type)
                 self._connect_last()
+                if not self._regex or not rh_group:
+                    raise PatternParseError(
+                        "'|' must have atleast one token on each side",
+                        self._pattern, start_cur)
                 self._regex |= rh_group
                 return True
             # All other chars:

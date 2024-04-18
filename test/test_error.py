@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 
 from src import Regex
 from src.regexutil import ParserPredicate, State
-from . import regex_matcher
+from . import regex_tests
 
 
 class TestError(Exception, ABC):
@@ -19,17 +19,27 @@ class TestError(Exception, ABC):
                 f"{self.__cause__}")
 
 
+class TestErrorImpl(TestError):
+    _msg: str
+
+    def __init__(self, msg: str):
+        super().__init__(msg)
+        self._msg = msg
+    
+    def outcome_message(self) -> str:
+        return f"Test failed: {self._msg}"
+
 class RegexBuildError(TestError):
     pass
 
 
 class StateIdentityError(RegexBuildError):
-    _state: 'regex_matcher.NodeMatcher'
-    _attempted_state: 'regex_matcher.RegexState'
+    _state: 'regex_tests.NodeMatcher'
+    _attempted_state: 'regex_tests.RegexState'
 
     def __init__(self,
-                 state: 'regex_matcher.NodeMatcher',
-                 tried_to_be: 'regex_matcher.RegexState'):
+                 state: 'regex_tests.NodeMatcher',
+                 tried_to_be: 'regex_tests.RegexState'):
         super().__init__(state, tried_to_be)
         self._state = state
         self._attempted_state = tried_to_be
@@ -37,9 +47,9 @@ class StateIdentityError(RegexBuildError):
     def outcome_message(self) -> str:
         state_name: str
         match self._attempted_state:
-            case regex_matcher.RegexState.END:
+            case regex_tests.RegexState.END:
                 state_name = "the end state"
-            case regex_matcher.RegexState.START:
+            case regex_tests.RegexState.START:
                 state_name = "the start state"
             case _:
                 raise ValueError(
@@ -48,12 +58,12 @@ class StateIdentityError(RegexBuildError):
 
 
 class EdgeNotFoundError(RegexBuildError):
-    _start_state: 'regex_matcher.NodeMatcher'
+    _start_state: 'regex_tests.NodeMatcher'
     _end_state: State | None
     _expected_edge: ParserPredicate
 
     def __init__(self,
-                 state: 'regex_matcher.NodeMatcher',
+                 state: 'regex_tests.NodeMatcher',
                  edge: ParserPredicate,
                  to: State | None = None):
         super().__init__(state, edge, to)
@@ -71,11 +81,11 @@ class EdgeNotFoundError(RegexBuildError):
 
 
 class ExtraEdgesError(RegexBuildError):
-    _start_state: 'regex_matcher.NodeMatcher'
+    _start_state: 'regex_tests.NodeMatcher'
     _extras: dict[State, list[ParserPredicate]]
 
     def __init__(self,
-                 state: 'regex_matcher.NodeMatcher',
+                 state: 'regex_tests.NodeMatcher',
                  extras: dict[State, list[ParserPredicate]]):
         super().__init__(state, extras)
         self._start_state = state
