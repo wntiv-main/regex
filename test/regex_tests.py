@@ -113,14 +113,26 @@ class NodeMatcher:
 
     def _msg(self,
              _visited: list['NodeMatcher'],
-             _indent: int = 0,
-             _top: bool = False,
-             *, _TAB="\t") -> str:
+             _top: bool = False) -> str:
+        """
+        Cursed logic to produce a human-readable description of the
+        "multi-digraph" structure.
+
+        Arguments:
+            _visited -- list of previously visited nodes
+            _top -- _description_ (default: {False})
+
+        Returns:
+            A string description of this node in the graph.
+        """
+        joiner = ""
+        if not _top:
+            joiner = " to "
         if self in _visited:
             if self._type == RegexState.END:
-                return "to the end state."
+                return f"{joiner}the end state."
             if self._type == RegexState.START:
-                return "to the start state."
+                return f"{joiner}the start state."
             left_idx = _visited.index(self)
             right_idx = len(_visited) - left_idx
             relative_pos: str
@@ -129,34 +141,32 @@ class NodeMatcher:
             elif right_idx == 2:
                 relative_pos = "previous"
             elif left_idx == 0:
+                # If we get here *something* is wrong, but ill put this
+                # here anyway ig...
                 relative_pos = "start"
             elif left_idx > right_idx:
                 relative_pos = (NodeMatcher._num_w_ending(right_idx - 1)
                                 + " previous")
             else:
                 relative_pos = NodeMatcher._num_w_ending(left_idx + 1)
-            return f"back to the {relative_pos} state."
+            return (f"{joiner.replace('to', 'back to')}the "
+                    f"{relative_pos} state.")
         _visited.append(self)
         if len(self._children) == 0:
-            joiner = ""
-            if not _top:
-                joiner = " to "
             return f"{joiner}{self._state_name()}."
         elif len(self._children) == 1:
             result = ""
             if _top or self._type != RegexState.ANY:
                 result = self._state_name()
             result += f", followed by an {self._children[0][0]}-move"
-            result += self._children[0][1]._msg(_visited, _indent)
+            result += self._children[0][1]._msg(_visited)
             return result
         else:
-            result = ""
-            if not _top:
-                result = " to "
+            result = joiner
             result += f"{self._state_name()}, followed by:<ul>"
             for move, child in self._children:
                 result += (f"<li>an {move}-move to "
-                           f"{child._msg(_visited, _indent + 1, True)}"
+                           f"{child._msg(_visited, True)}"
                            f"</li>")
             result += "</ul>"
             return result

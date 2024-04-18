@@ -235,13 +235,18 @@ class _optimise_regex(_MovingIndexHandler):
         elif end.value() != self.regex.end:
             self.regex.edge_map[start.value(), end.value()].remove(
                 MatchConditions.epsilon_transition)
+            # Ensure other has no self-epsilon-loops
+            self.regex.edge_map[end.value(), end.value()].discard(
+                MatchConditions.epsilon_transition)
             self.regex._merge_outputs(start.value(), end.value())
             if self.regex._remove_if_unreachable(end.value()):
                 self.remove(end)
             else:
                 self.todo.add(self.index(end))
             self.regex._debug(f"e-closed {start} <- {end}")
-            end.reset_iteration()
+            # Reset outer loop to give other states a chance to run
+            self.todo.add(self.index(start))
+            start.reset_iteration()
 
         # self.regex.edge_map[start, end].remove(
         #     MatchConditions.epsilon_transition)
