@@ -3,6 +3,31 @@ from .regex_tests import NodeMatcher, RegexState, TestNoParseError, TestParseErr
 from .test import TestCase, TestType, _copy_html
 
 
+# Digits
+@TestRegexShape(r"\d")
+def test_digits(start: NodeMatcher):
+    start.has_any('0123456789', RegexState.END)
+
+
+TestRegexMatches(r"\d")                 \
+    .assert_matches('0', '3', '7', '9') \
+    .assert_doesnt_match('a', 'five', 'hello', '?')
+
+
+# "Word" chars
+@TestRegexShape(r"\w")
+def test_digits(start: NodeMatcher):
+    # all chars matched by \w
+    start.has_any('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+                  '0123456789_',
+                  RegexState.END)
+
+
+TestRegexMatches(r"\w")                                \
+    .assert_matches('0', '7', '_', 'a', 'E', 'j', 'X') \
+    .assert_doesnt_match('$', '+', '&', '?', '-')
+
+
 # Star
 @TestRegexShape(r"a*")
 def test_star(start: NodeMatcher):
@@ -17,6 +42,15 @@ TestRegexMatches(r"a*", TestType.BOUNDARY) \
     .assert_matches('')
 
 TestParseError(r'*abc')
+
+
+@TestRegexShape(r"(a?b?c?)*",
+                expecting="all epsilon-moves to be removed")
+def test_epsilon_closure_and_minification(start: NodeMatcher):
+    start.is_also(RegexState.END)          \
+        .has_literal('a', RegexState.SELF) \
+        .has_literal('b', RegexState.SELF) \
+        .has_literal('c', RegexState.SELF)
 
 
 # Plus
@@ -66,6 +100,27 @@ TestRegexMatches(r"a|b")      \
 def test_longer_or(start: NodeMatcher):
     start.has_literal_chain('hello', RegexState.END)
     start.has_literal_chain('goodbye', RegexState.END)
+
+
+@TestRegexShape(r"hello|hi",
+                expecting="two h-moves to be merged into one")
+def test_powerset_construction(start: NodeMatcher):
+    next = start.has_literal('h')
+    next.has_literal_chain('ello', RegexState.END)
+    next.has_literal('i', RegexState.END)
+
+
+@TestRegexShape(r"\da|[13579a-e]b",
+                expecting="the edges to be merged into an equivilent"
+                          "edge that covers both of them")
+def test_complex_powerset_construction(start: NodeMatcher):
+    left = start.has_any('02468')
+    intersect = start.has_any('13579')
+    right = start.has_any('abcde')
+    left.has_literal('a', RegexState.END)
+    intersect.has_literal('a', RegexState.END)
+    intersect.has_literal('b', RegexState.END)
+    right.has_literal('b', RegexState.END)
 
 
 TestRegexMatches(r"hello\Z|goodbye\Z")  \
@@ -203,7 +258,8 @@ TestNoParseError(r'a{3,5}')
 
 
 def run_tests():
-    TestCase.run_cases()
+    print("TEST SUMMARY:")
+    print(TestCase.format_results_table(TestCase.run_cases()))
     _copy_html(TestCase.produce_html_printout())
-    print("Ran all tests: results in clipboard")
+    print("Ran all tests: full results in clipboard")
     TestRegexShape._failed_regex.display()

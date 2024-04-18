@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 from traceback import format_exc
-from typing import Callable, TypeVarTuple
+from typing import Any, Callable, TypeVarTuple
 
 from .test_error import TestError, TestErrorImpl
 
@@ -12,16 +12,18 @@ class ResultType(Enum):
     PASS = auto()
     FAIL = auto()
     ERROR = auto()
+    TOTAL = auto()  # Used only for printing
 
 
 class TestType(Enum):
-    PASSING = auto()
+    EXPECTED = auto()
     BOUNDARY = auto()
-    ERROR = auto()
+    INVALID = auto()
+    TOTAL = auto()  # Used only for printing
 
 
-def _htmlify(content: str):
-    return (content.replace('\n', '<br/>'))
+def _htmlify(content: Any) -> str:
+    return (str(content).replace('\n', '<br/>'))
 
 
 def _copy_html(
@@ -85,19 +87,47 @@ class TestCase(ABC):
     _result: ResultType | None
 
     @staticmethod
-    def run_cases():
+    def run_cases() -> dict[TestType, dict[ResultType, int]]:
+        # None represents total
+        result = {
+            test: {result: 0
+                   for result in ResultType}
+            for test in TestType
+        }
         for case in TestCase._test_cases:
             case.run()
+            # Update category and totals
+            result[case._type][case._result] += 1
+            result[case._type][ResultType.TOTAL] += 1
+            result[TestType.TOTAL][case._result] += 1
+            result[TestType.TOTAL][ResultType.TOTAL] += 1
+        return result
+
+    @staticmethod
+    def format_results_table(
+            results: dict[TestType | None,
+                          dict[ResultType | None, int]],
+            *, _col_width: int = 12) -> str:
+        out = " " * _col_width
+        for header in TestType:
+            out += f"{header.name:^{_col_width}}"
+        for row in ResultType:
+            out += f"\n{row.name:>{_col_width}}"
+            for column in TestType:
+                out += f"{results[column][row]:>{_col_width}}"
+        return out
 
     @staticmethod
     def produce_html_printout() -> str:
         td_style = "border: 1px solid black;"
-        results = {test_type: ("<tr><th>Test #</th><th>Test</th>"
-                              "<th>Expected</th><th>Outcome</th>"
-                               "<th>Result</th></tr>").replace(
-            '<th>', f'<th style="{td_style}">')
-                   for test_type in TestType}
-        counters = {test_type: 0 for test_type in TestType}
+        results = {test_type: (
+            "<tr><th>Test #</th><th>Test</th>"
+            "<th>Expected</th><th>Outcome</th>"
+            "<th>Result</th></tr>").replace('<th>',
+                                            f'<th style="{td_style}">')
+            for test_type in TestType if test_type != TestType.TOTAL}
+        counters = {test_type: 0 for test_type in TestType
+                    if test_type != TestType.TOTAL}
         for case in TestCase._test_cases:
             results[case._type] += (
                 f"<tr><td>{counters[case._type]}</td>"
@@ -111,7 +141,8 @@ class TestCase(ABC):
         return "<br/>".join((f"<h1>{test_type.name}</h1><br/>"
                              f"<table style=\"{table_style}\">"
                              f"{results[test_type]}</table><br/>"
-                             for test_type in TestType))
+                             for test_type in TestType
+                             if test_type != TestType.TOTAL))
 
     def __init__(self, test_type: TestType, description: str,
                  *, expected: str | None = None):
@@ -158,7 +189,7 @@ class AssertRaises(TestCase):
     _callable: Callable[..., None]
 
     def __init__(self, exc_type: type[Exception], description: str,
-                 test_type: TestType = TestType.ERROR):
+                 test_type: TestType = TestType.INVALID):
         super().__init__(
             test_type, description,
             expected=f"Expected {exc_type.__name__} to be raised.")

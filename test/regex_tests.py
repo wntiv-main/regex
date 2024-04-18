@@ -222,16 +222,19 @@ class TestRegexShape(TestCase):
     _debug_regex: Regex | None
     _start: NodeMatcher
     _end: NodeMatcher
+    _expecting: str | None
     _callable: Callable[[NodeMatcher], None]
 
     def __init__(self, pattern: str,
-                 test_type: TestType = TestType.PASSING):
-        self._start = NodeMatcher(self, RegexState.START)
-        self._end = NodeMatcher(self, RegexState.END)
-        self._pattern = pattern
+                 test_type: TestType = TestType.EXPECTED,
+                 expecting: str | None = None):
         super().__init__(
             test_type,
             f"Trying to construct regular expression from `{pattern}`")
+        self._start = NodeMatcher(self, RegexState.START)
+        self._end = NodeMatcher(self, RegexState.END)
+        self._pattern = pattern
+        self._expecting = expecting
 
     # For use as decorator
     def __call__(self, func: Callable[[NodeMatcher], None]) -> None:
@@ -244,9 +247,14 @@ class TestRegexShape(TestCase):
         self._regex = Regex(self._pattern)
         self._debug_regex = self._regex.copy()
         self._callable(self._start)
-        self.set_expected(
-            f"Expected a DFA to be produced with "
-            f"{self._start._msg([], _top=True)}")
+        if self._expecting is not None:
+            self.set_expected(
+                f"Expected {self._expecting}. As such the DFA should "
+                f"start with {self._start._msg([], _top=True)}")
+        else:
+            self.set_expected(
+                f"Expected a DFA to be produced with "
+                f"{self._start._msg([], _top=True)}")
         self._evaluate()
         self.set_outcome(
             f"Produced a DFA with "
@@ -276,7 +284,7 @@ class TestRegexMatches(TestCase):
     _unexpected_matches: set[str]
 
     def __init__(self, pattern: str,
-                 test_type: TestType = TestType.PASSING):
+                 test_type: TestType = TestType.EXPECTED):
         super().__init__(test_type, f"Testing matches for `{pattern}`")
         self._pattern = pattern
         # Defer initialization for error capture
@@ -311,7 +319,7 @@ class TestNoParseError(TestCase):
     _pattern: str
 
     def __init__(self, pattern: str,
-                 test_type: TestType = TestType.ERROR):
+                 test_type: TestType = TestType.INVALID):
         super().__init__(
             test_type,
             f"Building regular expression from valid pattern "
@@ -328,7 +336,7 @@ class TestParseError(AssertRaises):
     _pattern: str
 
     def __init__(self, pattern: str,
-                 test_type: TestType = TestType.ERROR):
+                 test_type: TestType = TestType.INVALID):
         super().__init__(
             PatternParseError,
             f"Building regular expression from invalid pattern "

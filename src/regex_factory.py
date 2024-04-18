@@ -88,7 +88,7 @@ class _RegexFactory:
             ch: str,
             predicate: Callable[[int], bool],
             *, _started_at: int | None = None,
-            _open_ch_map={  # Static opject, initialized only once
+            _OPEN_CH_MAP={  # Static opject, initialized only once
                 ']': '[',
                 '}': '{',
                 ')': '(',
@@ -103,10 +103,10 @@ class _RegexFactory:
                     ch, current_attempt + len(ch))
             return current_attempt
         except ValueError as e:
-            if ch in _open_ch_map:
+            if ch in _OPEN_CH_MAP:
                 raise PatternParseError(
                     (f"Could not find closing '{ch}' for opening "
-                     f"'{_open_ch_map[ch]}'"),
+                     f"'{_OPEN_CH_MAP[ch]}'"),
                     self._pattern,
                     _started_at) from e
             else:
@@ -118,7 +118,7 @@ class _RegexFactory:
     def _consume_till_next(
             self,
             ch: str,
-            predicate: Callable[[int], bool]):
+            predicate: Callable[[int], bool] = lambda _: True):
         find_index = self._find_next(ch, predicate)
         result = self._pattern[self._cur:find_index]
         self._cur = find_index + len(ch)
@@ -347,8 +347,7 @@ class _RegexFactory:
                     pass
                 elif self._try_consume("?<") or self._try_consume("?P<"):
                     # Named capture group
-                    capture_group = self._consume_till_next(
-                        '>', lambda _: True)
+                    capture_group = self._consume_till_next('>')
                 else:
                     # Capturing group
                     self._capture_auto_id += 1
@@ -369,7 +368,7 @@ class _RegexFactory:
                 # epsilon moves sandbox group and prevent loops escaping
                 inner_group += MatchConditions.epsilon_transition
                 self._append(inner_group)
-                if nested:
+                if nested == _NestedType.NESTED_GROUP:
                     # Ensure that we still also have closing bracket
                     _ = self._find_next(')', self._is_unescaped,
                                         _started_at=self._cursor_started)
