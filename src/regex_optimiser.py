@@ -1,17 +1,29 @@
+__author__ = "Callum Hynes"
+__all__ = ["_optimise_regex"]
+
 from abc import ABC, abstractmethod
 import itertools
-from typing import Callable, Iterable, Self
+from typing import Callable, Iterable, Self, override
 import weakref
 
 import src as rx  # Type annotating
-from .regexutil import ConsumeAny, ConsumeString, MatchConditions, ParserPredicate, SignedSet, State
+from .regexutil import (ConsumeAny, ConsumeString, MatchConditions,
+                        ParserPredicate, SignedSet, State)
 
 
 class _MovingIndexHandler(ABC):
+    """
+    Manages a set of indices attached to a iterable, so that concurrent
+    modification and iteration are properly handled, by updating all
+    references to indices withing the list
+    """
+
     _instances: weakref.WeakSet['_MovingIndex']
+    """Set of all indices referencing this list"""
 
     @abstractmethod
     def size(self):
+        """The size of the list"""
         raise NotImplementedError()
 
     def __init__(self):
@@ -22,14 +34,30 @@ class _MovingIndexHandler(ABC):
         self._instances = weakref.WeakSet()
 
     def index(self, at: 'int | _MovingIndex') -> '_MovingIndex':
+        """
+        Create a handled reference to a list index
+
+        Arguments:
+            at -- The index to reference
+
+        Returns:
+            A reference to that index which will be updated accordingly
+            when the list is modified
+        """
         if isinstance(at, _MovingIndex):
             at = at.value()
-        return _MovingIndex(at, self)
-
-    def handle(self, instance: '_MovingIndex') -> None:
-        self._instances.add(instance)
+        result = _MovingIndex(at)
+        self._instances.add(result)
+        return result
 
     def remove(self, index: 'int | _MovingIndex') -> None:
+        """
+        Mark an element removed from the list, and update the references
+        into the list accordingly
+
+        Arguments:
+            index -- The index of the removed element
+        """
         if isinstance(index, _MovingIndex):
             index = index.value()
         for inst in self._instances:
@@ -61,66 +89,100 @@ class _MovingIndexHandler(ABC):
 
 
 class _MovingIndex:
+    """
+    An index into a list, updated by {_MovingIndexHandler} when the list
+    is modified
+    """
+
     _internal_index: int
+    """The actual index into the list"""
 
-    def __new__(cls, _: int, handler: _MovingIndexHandler) -> Self:
-        inst = super().__new__(cls)
-        handler.handle(inst)
-        return inst
-
-    def __init__(self, at: State, _: '_optimise_regex'):
+    def __init__(self, at: State):
         self._internal_index = at
 
     def value(self) -> int:
+        """
+        Get the integral index into the list for access
+
+        Returns:
+            The internal index
+        """
         return self._internal_index
 
     def next(self) -> Self:
+        """
+        Move to the next element in the list. Useful for iteration
+
+        Returns:
+            The current instance
+        """
         self._internal_index += 1
         return self
 
     def removed(self) -> bool:
+        """
+        Returns:
+            Whether this element has been removed
+        """
         return self._internal_index == -1
 
     def reset_iteration(self) -> None:
+        """Restart the iteration from the start of the list"""
         self._internal_index = -1
 
     def __str__(self) -> str:
+        """
+        Readable string representation
+
+        Returns:
+            String representation of the index
+        """
         return str(self._internal_index)
 
 
 # snake-case name as functional-like interface
 class _optimise_regex(_MovingIndexHandler):
-    regex: 'rx.Regex'
-    todo: set[_MovingIndex]
+    """
+    Optimises a Regex to use minimal states without any epsilon moves or
+    non-deterministic junctions
+    """
 
+    regex: 'rx.Regex'
+    """The Regex to optimise"""
+
+    todo: set[_MovingIndex]
+    """Set of states that should be visited"""
+
+    @override
     def size(self) -> int:
+        """Amount of states to iterate"""
         return self.regex.size
 
     def __init__(self, regex: 'rx.Regex'):
+        """
+        Optimises a Regex to use minimal states without any epsilon moves or
+        non-deterministic junctions
+
+        Arguments:
+            regex -- The Regex to optimise. This object WILL be mutated
+        """
         super().__init__()
         self.regex = regex
         self.todo = set(map(self.index, range(self.regex.size)))
         self.optimise()
 
-    def can_minify_inputs(self, s1: State, s2: State) -> bool:
-        if s1 == s2 or s1 == self.regex.start or s2 == self.regex.start:
-            return False
-        for i in range(self.regex.size):
-            if i == s1 or i == s2:
-                diff = (self.regex.edge_map[i, s1]
-                        ^ self.regex.edge_map[i, s2])
-                for edge in diff:
-                    if edge != MatchConditions.epsilon_transition:
-                        return False
-            elif (self.regex.edge_map[i, s1]
-                  != self.regex.edge_map[i, s2]):
-                return False
-        return True
-
     @staticmethod
     def _mutable_diff(first: set[ParserPredicate],
                       second: set[ParserPredicate])\
             -> set[ParserPredicate]:
+        """
+        Finds the symmetric difference of two sets, using an alternative
+        hash function
+
+        Returns:
+            A new set containing all the elements that are only in ONE
+            of the two sets
+        """
         result: dict[int, list[ParserPredicate]] = {}
         for el in first:
             el_hash = el.mutable_hash()
@@ -144,7 +206,38 @@ class _optimise_regex(_MovingIndexHandler):
                 result[el.mutable_hash()] = [el]
         return set(itertools.chain.from_iterable(result.values()))
 
+    def can_minify_inputs(self, s1: State, s2: State) -> bool:
+        """
+        Compares the inputs of two states
+
+        Returns:
+            Whether the two states' inputs are similar enough that the
+            states can be merged
+        """
+        if s1 == s2 or s1 == self.regex.start or s2 == self.regex.start:
+            return False
+        for i in range(self.regex.size):
+            if i == s1 or i == s2:
+                diff = _optimise_regex._mutable_diff(
+                    self.regex.edge_map[i, s1],
+                    self.regex.edge_map[i, s2])
+                for edge in diff:
+                    if edge != MatchConditions.epsilon_transition:
+                        return False
+            elif (self.regex.edge_map[i, s1]
+                  != self.regex.edge_map[i, s2]):
+                return False
+        return True
+
+
     def can_minify_outputs(self, s1: State, s2: State) -> bool:
+        """
+        Compares the outputs of two states
+
+        Returns:
+            Whether the two states' outputs are similar enough that the
+            states can be merged
+        """
         if s1 == s2 or (
             (s1 == self.regex.end or s2 == self.regex.end)
             and not MatchConditions.epsilon_transition in
@@ -168,6 +261,10 @@ class _optimise_regex(_MovingIndexHandler):
         return True
 
     def optimise(self):
+        """
+        Iterate the entire multi-digraph, performing optimisations where
+        applicable
+        """
         # Use task queue to allow reiteration if a state is "dirtied"
         while self.todo:
             i = self.todo.pop()
@@ -191,11 +288,13 @@ class _optimise_regex(_MovingIndexHandler):
                 # > Powerset construction <
                 # While loop as expect size to change
                 # Iterate lower half of triangle:
-                #   0 1 2 3
-                # 0 \
+                #   0 1 2 3 ->
+                # 0 \       (j)
                 # 1 * \
                 # 2 * * \
                 # 3 * * * \
+                # |
+                # V (k)
                 # This means that any states added during the iteration
                 # will still be covered entirely
                 for j in self.iterate(start=1):
@@ -211,7 +310,12 @@ class _optimise_regex(_MovingIndexHandler):
                         continue
                     break  # continue break from above
 
-    def epsilon_closure(self, start: _MovingIndex, end: _MovingIndex):
+    def epsilon_closure(self, start: _MovingIndex, end: _MovingIndex) \
+            -> None:
+        """
+        Resolve any epsilon transitions from the given start state to
+        the given end state
+        """
         # Resolve epsilon transitions
         if start.value() == end.value():  # self-epsilon loops
             self.regex.edge_map[start.value(), end.value()].discard(
@@ -260,7 +364,11 @@ class _optimise_regex(_MovingIndexHandler):
         #     return _ActionType.DELETED_START
         # self.regex._debug(f"e-closed inputs {end} <- {start}")
 
-    def minimise(self, s1: _MovingIndex, s2: _MovingIndex):
+    def minimise(self, s1: _MovingIndex, s2: _MovingIndex) -> None:
+        """
+        Merge the two given states if possible, in order to minimise the
+        amount of states in the resultant DFA
+        """
         if self.can_minify_outputs(s1.value(), s2.value()):
             if s2.value() == self.regex.start:
                 self.regex.start = s1.value()
@@ -285,16 +393,24 @@ class _optimise_regex(_MovingIndexHandler):
 
     def powerset_construction(
             self, state: _MovingIndex,
-            out1: _MovingIndex, out2: _MovingIndex):
+            out1: _MovingIndex, out2: _MovingIndex) -> None:
+        """
+        Resolve any non-deterministic junctions from the given start
+        state to the two given output states
+
+        Arguments:
+            state -- The start state
+            out1, out2 -- The output states
+        """
         # Check if sets have any overlap
         row_set = self.regex.edge_map[state.value(), out1.value()]
         column_set = self.regex.edge_map[state.value(), out2.value()]
-        if MatchConditions.epsilon_transition in (row_set | column_set):
-            if (out2.value() != self.regex.end
-                    and out1.value() != self.regex.end):
-                # Unless e-move to end, retry
-                self.todo.add(self.index(state))
-                return
+        # if MatchConditions.epsilon_transition in (row_set | column_set):
+        #     if (out2.value() != self.regex.end
+        #             and out1.value() != self.regex.end):
+        #         # Unless e-move to end, retry
+        #         self.todo.add(self.index(state))
+        #         return
         row_coverage = SignedSet.union(
             *(x.coverage() for x in row_set
               if x != MatchConditions.epsilon_transition))

@@ -1,3 +1,6 @@
+__author__ = "Callum Hynes"
+__all__ = ["run_tests"]
+
 from src.regexutil import MatchConditions
 from .regex_tests import NodeMatcher, RegexState, TestNoParseError, TestParseError, TestRegexMatches, TestRegexShape
 from .test import TestCase, TestType, _copy_html
@@ -16,7 +19,7 @@ TestRegexMatches(r"\d")                 \
 
 # "Word" chars
 @TestRegexShape(r"\w")
-def test_digits(start: NodeMatcher):
+def test_alphanum(start: NodeMatcher):
     # all chars matched by \w
     start.has_any('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
                   '0123456789_',
@@ -258,6 +261,7 @@ TestNoParseError(r'a{3,5}')
 
 
 def run_tests():
+    """Run all tests and output to user"""
     print("TEST SUMMARY:")
     print(TestCase.format_results_table(TestCase.run_cases()))
     _copy_html(TestCase.produce_html_printout())

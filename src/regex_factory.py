@@ -1,27 +1,54 @@
+__author__ = "Callum Hynes"
+__all__ = ['PatternParseError', '_RegexFactory']
+
 from enum import IntEnum, auto
 from typing import Callable
 
 import src as rx  # type annotating
 from .regex_optimiser import _optimise_regex
-from .regexutil import CaptureGroup, ConsumeAny, ConsumeString, \
-    MatchConditions, ParserPredicate, SignedSet, _parser_symbols, \
-    _parser_symbols_escaped
+from .regexutil import (CaptureGroup, ConsumeAny, ConsumeString,
+                        MatchConditions, ParserPredicate, SignedSet,
+                        _parser_symbols, _parser_symbols_escaped)
 
 
 class PatternParseError(Exception):
+    """
+    An error which occured during the parsing of the regular expression
+    pattern.
+    """
     message: str
+    """The human-readable message associated with the error."""
     parse_src: str | None
+    """The pattern which caused the error."""
     parse_idx: int | None
+    """The index into the pattern where the error was caused."""
 
     def __init__(self, msg: str,
                  src: str | None = None,
                  idx: int | None = None) -> None:
+        """
+        Initializes a regular expression parser error.
+
+        Arguments:
+            msg -- The human-readable message associated with the error
+            src -- The pattern in which the error was found
+                (default: {None})
+            idx -- The index within the pattern where the error was
+                found (default: {None})
+        """
         super().__init__(msg, src, idx)
         self.message = msg
         self.parse_src = src
         self.parse_idx = idx
 
     def __str__(self) -> str:
+        """
+        Human-readable string representaion of the error.
+        
+        Returns:
+            human-readable error message, with indication of where
+            the error occured within the source string.
+        """
         result = self.message
         if self.parse_idx is not None and self.parse_src is not None:
             # Add parse index visual
@@ -35,28 +62,68 @@ class PatternParseError(Exception):
 
 
 class _NestedType(IntEnum):
+    """
+    The way that _RegexFactory was called, which has slight impacts on
+    it's functionality.
+    """
+
     TOP = auto()
-    # Bracketed groups: (a)
+    """
+    Top-level; no nesting. Closing paranthesis cause a parse error.
+    """
+
     NESTED_GROUP = auto()
-    # Alternatives: a|b
+    """
+    Nested call to _RegexFactory.build by a bracketed group. Closing
+    paranthesis close the group.
+    """
+
     NESTED_ALTERNATIVE = auto()
+    """
+    Nested call to _RegexFactory.build by a union (|) operator. Closing
+    paranthesis delegate handling to the caller.
+    """
 
 
 class _RegexFactory:
     _regex: 'rx.Regex'
+    """The Regex being currently built"""
+
     _pattern: str
+    """The string pattern being parsed"""
+
     _cur: int
+    """The current parse index into {_pattern}"""
+
     _last_token: 'rx.Regex | None'
+    """The last parsed token, stored seperately for `?`, `+`, etc."""
 
     _capture_auto_id: int
+    """Auto-incrementing ID for capture groups"""
+
     _cursor_started: int
+    """The index into {_pattern} where this factory started parsing"""
 
     def __init__(self, pattern: str,
                  *, _cursor: int = 0,
                  _cid: int = 0,
                  _open_bracket_pos: int = 0) -> None:
+        """
+        Initialize parser for the given pattern, starting at a given
+        position ({_cursor)}.
+
+        Arguments:
+            pattern -- The regular expression as a string, to parse.
+
+        Keyword Arguments:
+            _cursor -- The index into the pattern to start parsing
+                (default: {0})
+            _cid -- Initial value for the auto-incrementing ID
+                (default: {0})
+            _open_bracket_pos -- Position of the opening bracket, if
+                any, used for detailed error printouts. (default: {0})
+        """
         regex = rx.Regex(_privated=None)
-        regex.edge_map = rx.Regex._empty_arr((1, 1))
         self._regex = regex
         self._pattern = pattern
         self._cur = _cursor
@@ -67,17 +134,39 @@ class _RegexFactory:
         self._cursor_started = _open_bracket_pos
 
     def _append(self, connection: 'ParserPredicate | rx.Regex') -> None:
+        """
+        Append to the regex, correctly handling tokens for {_last_token}
+
+        Arguments:
+            connection -- The connection or regular expression to append
+        """
         if isinstance(connection, ParserPredicate):
             connection = rx.Regex(connection, _privated=None)
         self._connect_last()
         self._last_token = connection
 
     def _consume_char(self) -> str:
+        """
+        Consume a character from the pattern
+
+        Returns:
+            The character that was consumed
+        """
         ch = self._pattern[self._cur]
         self._cur += 1
         return ch
 
     def _try_consume(self, match: str) -> bool:
+        """
+        Try to consume the given string from the front of the pattern,
+        if the string matches.
+
+        Arguments:
+            match -- The string to try consume
+
+        Returns:
+            Whether or not the string was found and consumed
+        """
         if self._pattern[self._cur:].startswith(match):
             self._cur += len(match)
             return True
@@ -86,14 +175,34 @@ class _RegexFactory:
     def _find_next(
             self,
             ch: str,
-            predicate: Callable[[int], bool],
+            predicate: Callable[[int], bool] = lambda _: True,
             *, _started_at: int | None = None,
-            _OPEN_CH_MAP={  # Static opject, initialized only once
+            _OPEN_CH_MAP={  # Static object, initialized only once
                 ']': '[',
                 '}': '{',
                 ')': '(',
                 '>': '<'
-            }):
+            }) -> int:
+        """
+        Find the next occurance of the given character in the pattern
+
+        Arguments:
+            ch -- The string to search for
+            predicate -- A predicate for whether the search should stop,
+                passed the current index; search stops if predicate
+                returns True
+
+        Keyword Arguments:
+            _started_at -- The start position of the search, used in
+                detailed error messages (default: {None})
+
+        Raises:
+            PatternParseError: If the substring is not found in the
+                pattern
+
+        Returns:
+            The index of the found string
+        """
         if _started_at is None:
             _started_at = self._cur - 1
         try:
@@ -119,17 +228,55 @@ class _RegexFactory:
             self,
             ch: str,
             predicate: Callable[[int], bool] = lambda _: True):
+        """
+        Find the next occurance of the given character in the pattern,
+        and consume up until (and including) that point
+
+        Arguments:
+            ch -- The string to search for
+            predicate -- A predicate for whether the search should stop,
+                passed the current index; search stops if predicate
+                returns True
+
+        Raises:
+            PatternParseError: If the substring is not found in the
+                pattern
+
+        Returns:
+            Everything that was consumed, until (and excluding) the
+            search string
+        """
         find_index = self._find_next(ch, predicate)
         result = self._pattern[self._cur:find_index]
         self._cur = find_index + len(ch)
         return result
 
     def _is_escaped(self, at: int) -> bool:
+        """
+        Finds whether the given char is escaped by backslashes. This
+        requires that it is preceded by an odd number of backslashes
+
+        Arguments:
+            at -- The index to search
+
+        Returns:
+            Whether the char is escaped
+        """
         while self._pattern[:at].endswith("\\\\"):
             at -= 2
         return self._pattern[:at].endswith("\\")
 
     def _is_unescaped(self, at: int) -> bool:
+        """
+        Finds whether the given char is not escaped by backslashes. This
+        requires that it is preceded by an even number of backslashes
+
+        Arguments:
+            at -- The index to search
+
+        Returns:
+            Whether the char is not escaped
+        """
         return not self._is_escaped(at)
 
     @staticmethod
@@ -145,7 +292,7 @@ class _RegexFactory:
                 "A-Z", "0-9a-z_", etc.
 
         Returns:
-            A set of all the conforming characters.
+            A SignedSet of all the conforming characters.
         """
         result = SignedSet()
         spec_len = len(class_specifier)
@@ -153,13 +300,15 @@ class _RegexFactory:
         while cur < spec_len:
             char: str | None = class_specifier[cur]
             if char == '-':
-                raise PatternParseError("range with no start char",
-                                        class_specifier, cur)
+                raise PatternParseError(
+                    "range with no start char", class_specifier, cur)
+            # Handle escapes
             if char == '\\':
                 cur += 1
                 if cur >= spec_len:
-                    raise PatternParseError("Incomplete escape sequence",
-                                            class_specifier, cur - 1)
+                    raise PatternParseError(
+                        "Incomplete escape sequence",
+                        class_specifier, cur - 1)
                 char = class_specifier[cur]
                 match char:
                     #        Hello!     Hey.
@@ -172,13 +321,15 @@ class _RegexFactory:
                                    ConsumeAny)):
                         # special ranges e.g. \d, \s
                         # not sure this is standard but its useful so...
-                        result |= _parser_symbols_escaped[x].match_set
+                        result |= (_parser_symbols_escaped[x]
+                                   .match_set)  # type: ignore
                         # Do not handle further
                         char = None
                     case _:
                         raise PatternParseError(
                             "Invalid escape sequence",
                             class_specifier, cur)
+            # Handle char ranges
             if cur + 1 < spec_len and class_specifier[cur + 1] == '-':
                 cur += 2
                 if char is None:
@@ -193,17 +344,20 @@ class _RegexFactory:
                 result |= SignedSet(
                     {chr(i) for i in range(ord(char),
                                            ord(end_chr) + 1)})
+            # Normal chars
             elif char is not None:
                 result.add(char)
             cur += 1
         return result
 
     def _connect_last(self):
+        """Connect the {_last_token} to the Regex"""
         if self._last_token is not None:
             self._regex += self._last_token
             self._last_token = None
 
     def _require_previous(self):
+        """Raise a parse exception if {_last_token} was not set"""
         if self._last_token is None:
             raise PatternParseError(
                 f"'{self._pattern[self._cur - 1]}' must be preceded by"
@@ -211,11 +365,18 @@ class _RegexFactory:
 
     def build(self, *, _nested: _NestedType = _NestedType.TOP) \
             -> 'rx.Regex':
+        """
+        Parse the pattern and return the resultant Regex
+
+        Returns:
+            The final Regex produced
+        """
         while self._cur < len(self._pattern):
             if self._parse_char(self._consume_char(), _nested):
                 break
         self._connect_last()
         if _nested == _NestedType.TOP:
+            # Only do optimisation on top-level
             self._regex._debug("start")
             # Loop until can match
             # self._regex.connect(self._regex.start,
@@ -225,6 +386,15 @@ class _RegexFactory:
         return self._regex
 
     def _parse_escaped(self, char: str) -> None:
+        """
+        Handle parsing of escaped chars in the pattern
+
+        Arguments:
+            char -- The char to handle
+
+        Raises:
+            PatternParseError: If a char is escaped that shouldn't be
+        """
         match char:
             # Special chars:
             # \A, \Z, \w, \d, etc...
@@ -235,12 +405,25 @@ class _RegexFactory:
             case (ch, _) if ch in "\\.^$+*?[]{}()":
                 self._append(ConsumeString(ch))
             case _:
-                bk = '\\'  # dumb python
                 raise PatternParseError(
                     f"Unexpected sequence: "
-                    f"'{bk if self._escaped else ''}{char}'")
+                    f"'\\{char}'")
 
     def _parse_char(self, char: str, nested: _NestedType) -> bool:
+        """
+        Handle parsing of chars in the pattern
+
+        Arguments:
+            char -- The char to parse
+            nested -- The nesting state of the parser
+
+        Raises:
+            PatternParseError: If there is any unexpected error while
+                parsing
+
+        Returns:
+            Whether the parse loop should break
+        """
         if char == '\\':
             self._parse_escaped(self._consume_char())
             return False
@@ -250,9 +433,11 @@ class _RegexFactory:
                 self._append(_parser_symbols[ch].copy())
             case '?':  # Make _last_token optional
                 self._require_previous()
+                assert self._last_token is not None
                 self._last_token = self._last_token.optional()
             case '+':  # Repeat 1+ times quantifier
                 self._require_previous()
+                assert self._last_token is not None
                 self._last_token = self._last_token.repeated()
                 # sandbox to prevend out-of-order-ing sequenced loops
                 # TODO: is this neccesary??
@@ -261,6 +446,7 @@ class _RegexFactory:
                 self._append(MatchConditions.epsilon_transition)
             case '*':  # Repeat 0+ times quantifier
                 self._require_previous()
+                assert self._last_token is not None
                 self._last_token = self._last_token.optional().repeated()
                 # see above
                 self._append(MatchConditions.epsilon_transition)
@@ -274,6 +460,8 @@ class _RegexFactory:
                 except PatternParseError as e:
                     # Re-raise with context
                     e.parse_src = self._pattern
+                    if e.parse_idx is None:
+                        e.parse_idx = 0
                     e.parse_idx += start_cur
                     raise e
                 if negated:
@@ -281,6 +469,7 @@ class _RegexFactory:
                 self._append(ConsumeAny(chars))
             case '{':  # n-quantifier
                 self._require_previous()
+                assert self._last_token is not None
                 start_cur = self._cur
                 quantity_str = self._consume_till_next(
                     '}', self._is_unescaped)
@@ -373,10 +562,12 @@ class _RegexFactory:
                     _ = self._find_next(')', self._is_unescaped,
                                         _started_at=self._cursor_started)
             case ')':
-                if nested != _NestedType.NESTED_GROUP:
+                if nested == _NestedType.TOP:
                     raise PatternParseError(
                         f"Unopened '{char}'",
                         self._pattern, self._cur - 1)
+                if nested == _NestedType.NESTED_ALTERNATIVE:
+                    self._cur -= 1  # Do not consume bracket
                 # Exit parse loop early, jump to outer group
                 return True
             case '}' | ']':

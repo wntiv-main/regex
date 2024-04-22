@@ -1,14 +1,19 @@
+__author__ = "Callum Hynes"
+__all__ = ["ResultType", "TestType", "TestCase", "_copy_html",
+           "AssertRaises", "AssertNoRaises"]
+
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 from traceback import format_exc
-from typing import Any, Callable, TypeVarTuple
+from typing import Any, Callable, TypeVarTuple, override
 
-from .test_error import TestError, TestErrorImpl
+from .test_error import ExceptionAsTestError, TestError, TestErrorImpl
 
 TArgs = TypeVarTuple("TArgs")
 
 
 class ResultType(Enum):
+    """Represents the outcome of the test"""
     PASS = auto()
     FAIL = auto()
     ERROR = auto()
@@ -16,6 +21,7 @@ class ResultType(Enum):
 
 
 class TestType(Enum):
+    """Represents the A/M/E criterion the test was aimed toward"""
     EXPECTED = auto()
     BOUNDARY = auto()
     INVALID = auto()
@@ -23,6 +29,7 @@ class TestType(Enum):
 
 
 def _htmlify(content: Any) -> str:
+    """Formats the content to be printed as HTML"""
     return (str(content).replace('\n', '<br/>'))
 
 
@@ -41,13 +48,13 @@ def _copy_html(
     "EndSelection:%09d\r\n"
     "SourceURL:%s\r\n",
         _CF_HTML=[]):
-    # Adapted from https://stackoverflow.com/questions/55698762/how-to-copy-html-code-to-clipboard-using-python
     """
     Cursed function to copy HTML content to the user's clipboard
 
     Arguments:
         content -- The HTML content to copy.
     """
+    # Adapted from https://stackoverflow.com/questions/55698762/how-to-copy-html-code-to-clipboard-using-python
     try:
         import win32clipboard
     except ImportError:
@@ -78,16 +85,35 @@ def _copy_html(
 
 
 class TestCase(ABC):
+    """Represents a test to be ran on the program"""
+
     _test_cases: list['TestCase'] = list()
+    """List of all tests which have been created"""
 
     _type: TestType
+    """The A/M/E criterion this test was aimed for"""
+
     _description: str
+    """A description of what is being tested"""
+
     _expected: str | None
+    """A description of the expected outcome of this test"""
+
     _outcome: str | None
+    """A description of the actual outcome of this test"""
+
     _result: ResultType | None
+    """The overall result of the test"""
 
     @staticmethod
     def run_cases() -> dict[TestType, dict[ResultType, int]]:
+        """
+        Runs all of the test cases that have been declared thus far
+
+        Returns:
+            Table of the amount of tests, by test result and A/M/E
+                criterion
+        """
         # None represents total
         result = {
             test: {result: 0
@@ -96,6 +122,7 @@ class TestCase(ABC):
         }
         for case in TestCase._test_cases:
             case.run()
+            assert case._result is not None
             # Update category and totals
             result[case._type][case._result] += 1
             result[case._type][ResultType.TOTAL] += 1
@@ -105,9 +132,23 @@ class TestCase(ABC):
 
     @staticmethod
     def format_results_table(
-            results: dict[TestType | None,
-                          dict[ResultType | None, int]],
+            results: dict[TestType,
+                          dict[ResultType, int]],
             *, _col_width: int = 12) -> str:
+        """
+        Formats the resultant table from TestCase.run_cases() for
+        human-readable printing
+
+        Arguments:
+            results -- The results to be formatted
+
+        Keyword Arguments:
+            _col_width -- The width of the columns in the table
+                (default: {12})
+
+        Returns:
+            String containing the output table
+        """
         out = " " * _col_width
         for header in TestType:
             out += f"{header.name:^{_col_width}}"
@@ -119,6 +160,13 @@ class TestCase(ABC):
 
     @staticmethod
     def produce_html_printout() -> str:
+        """
+        Produces a detailed HTML table containing descriptions and
+        results of each test
+
+        Returns:
+            The output HTML as a string
+        """
         td_style = "border: 1px solid black;"
         results = {test_type: (
             "<tr><th>Test #</th><th>Test</th>"
@@ -129,6 +177,7 @@ class TestCase(ABC):
         counters = {test_type: 0 for test_type in TestType
                     if test_type != TestType.TOTAL}
         for case in TestCase._test_cases:
+            assert case._result is not None
             results[case._type] += (
                 f"<tr><td>{counters[case._type]}</td>"
                 f"<td>{case._description}</td>"
@@ -154,16 +203,26 @@ class TestCase(ABC):
         TestCase._test_cases.append(self)
 
     def set_expected(self, expected: str) -> None:
+        """Sets the expected outcome description"""
         self._expected = expected
 
     def set_outcome(self, response: str) -> None:
+        """Sets the actual outcome description"""
         self._outcome = response
 
     @abstractmethod
     def _inner_test(self) -> None:
+        """
+        Method which is actually tested. Should be overriden by test
+        cases to implement the test to run
+
+        Raises:
+            TestError: When the test should fail
+        """
         raise NotImplementedError()
 
-    def run(self):
+    def run(self) -> None:
+        """Runs the test, and populates the result fields"""
         try:
             self._inner_test()
             self._result = ResultType.PASS
@@ -178,6 +237,8 @@ class TestCase(ABC):
                              f"{format_exc()}")
 
     def __str__(self) -> str:
+        """Simple string representation fdor printing"""
+        assert self._result is not None
         return (f"{self._description}\n"
                 f"Expected: \n{self._expected}\n"
                 f"Outcome: \n{self._outcome}\n"
@@ -185,8 +246,13 @@ class TestCase(ABC):
 
 
 class AssertRaises(TestCase):
+    """Test case for testing code which *should* raise an exception"""
+
     _exc_type: type[Exception]
+    """The type of the exception that should be raised"""
+
     _callable: Callable[..., None]
+    """The inner function to test"""
 
     def __init__(self, exc_type: type[Exception], description: str,
                  test_type: TestType = TestType.INVALID):
@@ -201,10 +267,57 @@ class AssertRaises(TestCase):
         self._description = (f"{func.__name__.replace('_', ' ')}: "
                              f"{self._description}")
 
+    @override
     def _inner_test(self, *args, **kwargs) -> None:
+        """
+        Runs the test function
+
+        Raises:
+            TestErrorImpl: If the expected exception was not raised
+        """
         try:
             self._callable(*args, **kwargs)
             raise TestErrorImpl(f"{self._exc_type.__name__} was not "
                                 f"raised.")
         except self._exc_type as e:
             self.set_outcome(f"Exception was raised: {e}.")
+
+
+class AssertNoRaises(TestCase):
+    """
+    Test case for testing code which should not raise a given type of
+    exception
+    """
+
+    _exc_type: type[Exception]
+    """The type of the exception that should not be raised"""
+
+    _callable: Callable[..., None]
+    """The inner function to test"""
+
+    def __init__(self, exc_type: type[Exception], description: str,
+                 test_type: TestType = TestType.INVALID):
+        super().__init__(
+            test_type, description,
+            expected=f"Expected {exc_type.__name__} not to be raised.")
+        self._exc_type = exc_type
+
+    # For use as decorator
+    def __call__(self, func: Callable[..., None]) -> None:
+        self._callable = func
+        self._description = (f"{func.__name__.replace('_', ' ')}: "
+                             f"{self._description}")
+
+    @override
+    def _inner_test(self, *args, **kwargs) -> None:
+        """
+        Runs the test function
+
+        Raises:
+            ExceptionAsTestError: As a wrapper for the expected
+                exception type in case it is raised
+        """
+        try:
+            self._callable(*args, **kwargs)
+        except self._exc_type as e:
+            raise ExceptionAsTestError() from e

@@ -3,6 +3,9 @@
 # this by default.
 # Also need to support multi-graphs and self-loops
 
+__author__ = "Callum Hynes"
+__all__ = ['draw_networkx_edge_labels']
+
 def draw_networkx_edge_labels(
     G,
     pos,
@@ -57,14 +60,17 @@ def draw_networkx_edge_labels(
         The text transparency
 
     bbox : Matplotlib bbox, optional
-        Specify text box properties (e.g. shape, color etc.) for edge labels.
-        Default is {boxstyle='round', ec=(1.0, 1.0, 1.0), fc=(1.0, 1.0, 1.0)}.
+        Specify text box properties (e.g. shape, color etc.) for edge \
+            labels.
+        Default is {boxstyle='round', ec=(1.0, 1.0, 1.0), \
+            fc=(1.0, 1.0, 1.0)}.
 
     horizontalalignment : string (default='center')
         Horizontal alignment {'center', 'right', 'left'}
 
     verticalalignment : string (default='center')
-        Vertical alignment {'center', 'top', 'bottom', 'baseline', 'center_baseline'}
+        Vertical alignment {'center', 'top', 'bottom', 'baseline', \
+            'center_baseline'}
 
     ax : Matplotlib Axes object, optional
         Draw the graph in the specified Matplotlib axes.
@@ -83,7 +89,8 @@ def draw_networkx_edge_labels(
     Examples
     --------
     >>> G = nx.dodecahedral_graph()
-    >>> edge_labels = nx.draw_networkx_edge_labels(G, pos=nx.spring_layout(G))
+    >>> edge_labels = nx.draw_networkx_edge_labels(G, \
+            pos=nx.spring_layout(G))
 
     Also see the NetworkX drawing examples at
     https://networkx.org/documentation/latest/auto_examples/index.html
@@ -99,7 +106,7 @@ def draw_networkx_edge_labels(
     import matplotlib.pyplot as plt
     import numpy as np
     
-    _visited_loop_states: dict[int] = {}
+    _visited_loop_states: dict[int, int] = {}
 
     if edgelist is None:
         edgelist = list(G.edges())
@@ -131,7 +138,8 @@ def draw_networkx_edge_labels(
                 _visited_loop_states[n1] = 1
             # Self-loop:
             # Code from networkx.draw_networkx_edges    
-            edge_pos = np.asarray([(pos[e[0]], pos[e[1]]) for e in edgelist])
+            edge_pos = np.asarray([(pos[e[0]], pos[e[1]])
+                                   for e in edgelist])
             miny = np.amin(np.ravel(edge_pos[:, :, 1]))
             maxy = np.amax(np.ravel(edge_pos[:, :, 1]))
             h = maxy - miny
