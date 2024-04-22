@@ -1,7 +1,9 @@
 import traceback
+# In production, this would be a seperate package, and would thus be
+# imported with something akin to `from regex import Regex`
 from src import Regex
-from src.debug_graph_viewer import MultiFigureViewer, DebugGraphViewer, \
-    test_layouts_for
+from src.debug_graph_viewer import (MultiFigureViewer, DebugGraphViewer,
+                                    test_layouts_for)
 
 
 def main():
@@ -18,12 +20,12 @@ def main():
                                 rx.start, rx.end)
         fig = view.render()
         fig.suptitle(str(rx), fontsize=8)
-        fig.canvas.manager.set_window_title(msg)
+        fig.canvas.manager.set_window_title(msg)  # type: ignore
         mfv.add(fig)
         print(f"{msg}:\n{rx}")
     Regex._debug_function = debug
     try:
-        rx = Regex(r"(a?b?c?)*")
+        rx = Regex(r"a{,3}")
         print(rx)
         mfv.add(DebugGraphViewer(rx.edge_map,
                                  rx.start, rx.end).render())

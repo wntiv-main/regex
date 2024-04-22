@@ -400,7 +400,7 @@ class Regex:
         elif scalar > 0:
             monomer = self.copy()
             for _ in range(scalar - 1):
-                self += monomer
+                self += monomer.copy()
         else:
             raise ValueError(f"cannot multiply {self} by {scalar}")
         return self

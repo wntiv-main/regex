@@ -333,8 +333,10 @@ class NodeMatcher:
             return f"{joiner}{self._state_name()}."
         elif len(self._children) == 1:
             result = ""
-            if _top or self._type != RegexState.ANY:
+            if _top:
                 result = self._state_name()
+            if self._type != RegexState.ANY:
+                result = f" to {self._state_name()}"
             result += f", followed by an {self._children[0][0]}-move"
             result += self._children[0][1]._msg(_visited)
             return result
@@ -478,8 +480,9 @@ class TestRegexShape(TestCase):
                 related, describing the "shape" of the expected Regex
         """
         self._callable = func
-        self._description = (f"{func.__name__.replace('_', ' ')}: "
-                             f"{self._description}")
+        self._description = (
+            f"{func.__name__.replace('_', ' ').capitalize()}: "
+            f"{self._description}")
 
     @override
     def _inner_test(self) -> None:
@@ -515,7 +518,7 @@ class TestRegexShape(TestCase):
                                    self._debug_regex.end).render()
             fig.suptitle(str(self._outcome), fontsize=8)
             fig.canvas.manager.set_window_title(  # type: ignore
-                f"{self._callable.__name__}: {self._description}")
+                self._description)
             TestRegexShape._failed_regex.add(fig)
 
     def _evaluate(self):
