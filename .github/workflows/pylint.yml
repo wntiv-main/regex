@@ -20,4 +20,4 @@ jobs:
         pip install pylint
     - name: Analysing the code with pylint
       run: |
-        pylint --enable=useless-suppression $(git ls-files -x 'playground.py' '*.py')
+        pylint --rcfile=.pylintrc .

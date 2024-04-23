@@ -228,7 +228,7 @@ class _OptimiseRegex(_MovingIndexHandler):
                 return False
         return True
 
-    def optimise(self):
+    def optimise(self): # pylint: disable=too-many-branches
         """
         Iterate the entire multi-digraph, performing optimisations where
         applicable

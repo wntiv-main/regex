@@ -676,7 +676,8 @@ class GenericParserPredicate(ParserPredicate):
 
     @override
     def copy(self) -> 'GenericParserPredicate':
-        return GenericParserPredicate(self._sym, self._coverage, self._evaluate)
+        return GenericParserPredicate(self._sym, self._coverage,
+                                      self._evaluate)
 
 
 class ConsumeString(ParserPredicate):
@@ -778,7 +779,8 @@ class ConsumeAny(ParserPredicate):
             return self.match_set == other.match_set
         if isinstance(other, ConsumeString):
             return (self.match_set.length() == 1
-                    and self.match_set.unwrap_value() == other.match_string)
+                    and self.match_set.unwrap_value()
+                    == other.match_string)
         return NotImplemented
 
     @override
@@ -794,7 +796,7 @@ class ConsumeAny(ParserPredicate):
 P = TypeVar("P", bound=ParserPredicate)
 
 
-class _RepresentedBy:
+class _RepresentedBy: # pylint: disable=too-few-public-methods
     """Simple decorator to populate _parser_symbols(_escaped)"""
 
     _symbol: str

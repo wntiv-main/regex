@@ -1,3 +1,5 @@
+"""Utilities for running unit tests"""
+
 __author__ = "Callum Hynes"
 __all__ = ["ResultType", "TestType", "TestCase", "_copy_html",
            "AssertRaises", "AssertNoRaises"]
@@ -33,7 +35,7 @@ def _htmlify(content: Any) -> str:
     return (str(content).replace('\n', '<br/>'))
 
 
-def _copy_html(
+def _copy_html( # pylint: disable=dangerous-default-value
         content: str, *,
         _HTML_PREFIX="<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 "
         "Transitional//EN\"><HTML><HEAD></HEAD><BODY>"
@@ -54,28 +56,30 @@ def _copy_html(
     Arguments:
         content -- The HTML content to copy.
     """
-    # Adapted from https://stackoverflow.com/questions/55698762/how-to-copy-html-code-to-clipboard-using-python
+    # Adapted from https://stackoverflow.com/questions/55698762/how-to-copy-html-code-to-clipboard-using-python # pylint: disable=line-too-long
     try:
+        # pylint: disable=import-outside-toplevel
         import win32clipboard
     except ImportError:
         print("WARNING: `pip install pywin32` is needed to copy "
               "HTML output.")
         return
+    # pylint: disable=c-extension-no-member
     if not _CF_HTML:
         _CF_HTML.append(win32clipboard
                         .RegisterClipboardFormat("HTML Format"))
     html = _HTML_PREFIX + content + _HTML_SUFFIX
-    fragStart = len(_HTML_PREFIX)
-    fragEnd = len(_HTML_PREFIX) + len(content)
+    frag_start = len(_HTML_PREFIX)
+    frag_end = len(_HTML_PREFIX) + len(content)
     try:
         win32clipboard.OpenClipboard(0)
         win32clipboard.EmptyClipboard()
         # How long is the prefix going to be?
-        dummyPrefix = _MARKER % (0, 0, 0, 0, 0, 0, "file://null")
-        lenPrefix = len(dummyPrefix)
-        prefix = _MARKER % (lenPrefix, len(html)+lenPrefix,
-                            fragStart+lenPrefix, fragEnd+lenPrefix,
-                            fragStart+lenPrefix, fragEnd+lenPrefix,
+        dummy_prefix = _MARKER % (0, 0, 0, 0, 0, 0, "file://null")
+        len_prefix = len(dummy_prefix)
+        prefix = _MARKER % (len_prefix, len(html)+len_prefix,
+                            frag_start+len_prefix, frag_end+len_prefix,
+                            frag_start+len_prefix, frag_end+len_prefix,
                             "file://null")
         src = (prefix + html).encode("UTF-8")
         # print(src)
@@ -87,7 +91,7 @@ def _copy_html(
 class TestCase(ABC):
     """Represents a test to be ran on the program"""
 
-    _test_cases: list['TestCase'] = list()
+    _test_cases: list['TestCase'] = []
     """List of all tests which have been created"""
 
     _type: TestType
@@ -121,6 +125,7 @@ class TestCase(ABC):
             for test in TestType
         }
         for case in TestCase._test_cases:
+            # pylint: disable=protected-access
             case.run()
             assert case._result is not None
             # Update category and totals
@@ -177,6 +182,7 @@ class TestCase(ABC):
         counters = {test_type: 0 for test_type in TestType
                     if test_type != TestType.TOTAL}
         for case in TestCase._test_cases:
+            # pylint: disable=protected-access
             assert case._result is not None
             results[case._type] += (
                 f"<tr><td>{counters[case._type]}</td>"
@@ -231,7 +237,7 @@ class TestCase(ABC):
         except TestError as e:
             self._result = ResultType.FAIL
             self._outcome = e.outcome_message()
-        except Exception as e:
+        except Exception:  # pylint: disable=broad-exception-caught
             self._result = ResultType.ERROR
             self._outcome = (f"Test encountered an error: "
                              f"{format_exc()}")

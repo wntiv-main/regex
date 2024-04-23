@@ -1,4 +1,16 @@
 {
 	"python.analysis.typeCheckingMode": "basic",
-	"python.analysis.autoImportCompletions": true
+	"python.analysis.autoImportCompletions": true,
+	"pylint.args": ["--rcfile=${workspaceFolder}/.pylintrc"],
+	"pylint.severity": {
+		"convention": "Information",
+		"error": "Error",
+		"fatal": "Error",
+		"refactor": "Information",
+		"warning": "Warning",
+		"W0611": "Error",
+		"undefined-variable": "Warning"
+	},
+	"pylint.importStrategy": "fromEnvironment",
+	"pylint.lintOnChange": true
 }

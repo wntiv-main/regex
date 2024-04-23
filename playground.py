@@ -1,5 +1,4 @@
 """Playground for debug testing"""
-# pylint: disable=all
 
 import traceback
 # In production, this would be a seperate package, and would thus be

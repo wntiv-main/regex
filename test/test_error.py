@@ -1,3 +1,5 @@
+"""Exceptions for use within tests to report failure"""
+
 __author__ = "Callum Hynes"
 __all__ = ["TestError", "TestErrorImpl", "ExceptionAsTestError",
            "RegexBuildError", "StateIdentityError", "EdgeNotFoundError",
@@ -35,7 +37,7 @@ class TestError(Exception, ABC):
         """
         result = (f"{self.__class__.__name__} during testing: "
                   f"{self.outcome_message()}")
-        if self.__cause__:
+        if self.__cause__ is not None:
             result += (
                 f"\nCaused by {self.__cause__.__class__.__name__}: "
                 f"{self.__cause__}")
@@ -70,7 +72,6 @@ class ExceptionAsTestError(TestError):
 
 class RegexBuildError(TestError):
     """A test error related to the way a Regex was built"""
-    pass
 
 
 class StateIdentityError(RegexBuildError):
@@ -103,7 +104,7 @@ class StateIdentityError(RegexBuildError):
                 assert False, "States should always be ANY and SELF"
             case _:
                 assert_never(self._attempted_state)
-        return f"State {self._state._for} was not {state_name}."
+        return f"State {self._state.state_id} was not {state_name}."
 
 
 class EdgeNotFoundError(RegexBuildError):
@@ -133,9 +134,9 @@ class EdgeNotFoundError(RegexBuildError):
     @override
     def outcome_message(self) -> str:
         result = (f"Did not find {self._expected_edge}-move from "
-                  f"{self._start_state._for}")
-        if self._end_state._for is not None:
-            result += f" to {self._end_state._for}"
+                  f"{self._start_state.state_id}")
+        if self._end_state.state_id is not None:
+            result += f" to {self._end_state.state_id}"
         result += '.'
         return result
 
@@ -159,7 +160,7 @@ class ExtraEdgesError(RegexBuildError):
     @override
     def outcome_message(self) -> str:
         result = (f"Found unexpected edges from state "
-                  f"{self._start_state._for}:")
+                  f"{self._start_state.state_id}:")
         for state, edges in self._extras.items():
             result += (
                 f"\n- {', '.join(map(lambda x: f'{x}-move', edges))} "

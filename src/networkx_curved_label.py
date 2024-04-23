@@ -1,3 +1,8 @@
+"""Utility for drawing labels on curved edges"""
+
+import matplotlib.pyplot as plt
+import numpy as np
+
 # adapted from https://stackoverflow.com/a/70245742
 # Needed to draw labels on a curved line, as networkx does not support
 # this by default.
@@ -6,8 +11,9 @@
 __author__ = "Callum Hynes"
 __all__ = ['draw_networkx_edge_labels']
 
+# pylint: disable-next=design
 def draw_networkx_edge_labels(
-    G,
+    G,  # pylint: disable=invalid-name
     pos,
     edge_labels=None,
     edgelist=None,
@@ -103,9 +109,7 @@ def draw_networkx_edge_labels(
     draw_networkx_edges
     draw_networkx_labels
     """
-    import matplotlib.pyplot as plt
-    import numpy as np
-    
+
     _visited_loop_states: dict[int, int] = {}
 
     if edgelist is None:
@@ -137,13 +141,13 @@ def draw_networkx_edge_labels(
             else:
                 _visited_loop_states[n1] = 1
             # Self-loop:
-            # Code from networkx.draw_networkx_edges    
+            # Code from networkx.draw_networkx_edges
             edge_pos = np.asarray([(pos[e[0]], pos[e[1]])
                                    for e in edgelist])
             miny = np.amin(np.ravel(edge_pos[:, :, 1]))
             maxy = np.amax(np.ravel(edge_pos[:, :, 1]))
             h = maxy - miny
-            
+
             selfloop_ht = 0.005 * node_size if h == 0 else h
             v_shift = 10 * selfloop_ht + font_size * dup_number
         d_pos = pos_2 - pos_1
@@ -172,8 +176,10 @@ def draw_networkx_edge_labels(
             trans_angle = 0.0
         # use default box of white with white border
         if bbox is None:
-            bbox = dict(boxstyle="round", ec=(
-                1.0, 1.0, 1.0), fc=(1.0, 1.0, 1.0))
+            bbox = {
+                'boxstyle': "round",
+                'ec': (1.0, 1.0, 1.0),
+                'fc': (1.0, 1.0, 1.0)}
         if not isinstance(label, str):
             label = str(label)  # this makes "1" and 1 labeled the same
 

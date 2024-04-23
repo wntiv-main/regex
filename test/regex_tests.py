@@ -43,7 +43,7 @@ class NodeMatcher:
     _children: list[tuple[ParserPredicate, 'NodeMatcher']]
     """Description of the expected edges leaving this state"""
 
-    _for: State | None
+    state_id: State | None
     """The state ID that this node has been matched with"""
 
     _evaluated: bool
@@ -64,7 +64,7 @@ class NodeMatcher:
                  state_type: RegexState = RegexState.ANY):
         self._handler = handler
         self._children = []
-        self._for = None
+        self.state_id = None
         self._evaluated = False
         match state_type:
             case RegexState.ANY | RegexState.START | RegexState.END:
@@ -103,8 +103,8 @@ class NodeMatcher:
                 pass
             case _:
                 assert_never(self._expected_type)
-        if self._for is not None:
-            result += f" ({self._for})"
+        if self.state_id is not None:
+            result += f" ({self.state_id})"
         elif result == "state":
             result = "a state"
         return result
@@ -292,7 +292,7 @@ class NodeMatcher:
         """
         return f"{num}{NodeMatcher._num_ending(num)}"
 
-    def _msg(self,
+    def _msg(self, # pylint: disable=design
              _visited: list['NodeMatcher'],
              _top: bool = False) -> str:
         """
@@ -377,29 +377,30 @@ class NodeMatcher:
         # pylint: disable=protected-access
         if self._replaced_by is not None:
             # Proxy other
-            return self._replaced_by._evaluate(_taken)
+            self._replaced_by._evaluate(_taken)
+            return
         assert self._handler._regex is not None
         if self._evaluated:
             return  # Already been visited
         self._evaluated = True
         match self._expected_type:
             case RegexState.END:
-                if self._for != self._handler._regex.end:
+                if self.state_id != self._handler._regex.end:
                     raise StateIdentityError(self, self._expected_type)
             case RegexState.START:
-                if self._for != self._handler._regex.start:
+                if self.state_id != self._handler._regex.start:
                     raise StateIdentityError(self, self._expected_type)
             case RegexState.ANY | RegexState.SELF:
                 pass
             case _:
                 assert_never(self._type)
         for edge, child in self._children:
-            if child._for is None:
+            if child.state_id is None:
                 match child._type:
                     case RegexState.START:
-                        child._for = self._handler._regex.start
+                        child.state_id = self._handler._regex.start
                     case RegexState.END:
-                        child._for = self._handler._regex.end
+                        child.state_id = self._handler._regex.end
                     case RegexState.ANY:
                         for state in range(self._handler._regex.size):
                             if (state in _taken
@@ -408,9 +409,9 @@ class NodeMatcher:
                                 # State already has NodeMatcher
                                 continue
                             if edge.kind_of_in(self._handler._regex
-                                               .edge_map[self._for,
+                                               .edge_map[self.state_id,
                                                          state]):
-                                child._for = state
+                                child.state_id = state
                                 _taken.add(state)
                                 break
                         else:
@@ -419,17 +420,18 @@ class NodeMatcher:
                         assert_never(child._type)
             # cursedness since ParserPredicates are mutable
             found_edge = edge.kind_of_in(self._handler._regex.edge_map[
-                self._for, child._for])
+                self.state_id, child.state_id])
             if found_edge is None:
                 # Connection not found
                 raise EdgeNotFoundError(self, edge, child)
             self._handler._regex.edge_map[
-                self._for, child._for].remove(found_edge)  # type: ignore
+                self.state_id,
+                child.state_id].remove(found_edge) # type: ignore
             child._evaluate(_taken)
-        if self._handler._regex.edge_map[self._for, :].any():
+        if self._handler._regex.edge_map[self.state_id, :].any():
             extras = {
-                state: [edge for edge in (self._handler._regex
-                                          .edge_map[self._for, state])]
+                state: list(self._handler._regex
+                            .edge_map[self.state_id, state])
                 for state in range(self._handler._regex.size)}
             raise ExtraEdgesError(self, extras)
 
@@ -463,9 +465,6 @@ class TestRegexShape(TestCase):
     _expecting: str | None
     """An optional, more detailed description of the expected outcome"""
 
-    _callable: Callable[[NodeMatcher], None]
-    """The decorated function used to initialize the test"""
-
     def __init__(self, pattern: str,
                  test_type: TestType = TestType.EXPECTED,
                  expecting: str | None = None):
@@ -488,7 +487,7 @@ class TestRegexShape(TestCase):
                 matcher and describe how further nodes and edges are
                 related, describing the "shape" of the expected Regex
         """
-        self._callable = func
+        func(self._start)
         self._description = (
             f"{func.__name__.replace('_', ' ').capitalize()}: "
             f"{self._description}")
@@ -503,7 +502,6 @@ class TestRegexShape(TestCase):
         # Initialize _regex here so errors are catched by test
         self._regex = Regex(self._pattern)
         self._debug_regex = self._regex.copy()
-        self._callable(self._start)
         if self._expecting is not None:
             self.set_expected(
                 f"Expected {self._expecting}. As such the DFA should "
@@ -535,7 +533,7 @@ class TestRegexShape(TestCase):
         """Evaluate the node matchers on the Regex"""
         assert self._regex is not None
         # pylint: disable=protected-access
-        self._start._for = self._regex.start
+        self._start.state_id = self._regex.start
         self._start._evaluate(set((self._regex.end,)))
 
 

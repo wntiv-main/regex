@@ -90,10 +90,10 @@ class _NestedType(IntEnum):
 class _RegexFactory:
     """Factory class to parse and construct a Regex"""
 
-    _regex: 'rx.Regex'
+    regex: 'rx.Regex'
     """The Regex being currently built"""
 
-    _pattern: str
+    pattern: str
     """The string pattern being parsed"""
 
     _cur: int
@@ -128,8 +128,8 @@ class _RegexFactory:
                 any, used for detailed error printouts. (default: {0})
         """
         regex = rx.Regex(_privated=None)
-        self._regex = regex
-        self._pattern = pattern
+        self.regex = regex
+        self.pattern = pattern
         self._cur = _cursor
         # Should error if accessed before assigned
         self._last_token = None
@@ -137,7 +137,7 @@ class _RegexFactory:
         self._capture_auto_id = _cid
         self._cursor_started = _open_bracket_pos
 
-    def _append(self, connection: 'ParserPredicate | rx.Regex') -> None:
+    def append(self, connection: 'ParserPredicate | rx.Regex') -> None:
         """
         Append to the regex, correctly handling tokens for {_last_token}
 
@@ -146,7 +146,7 @@ class _RegexFactory:
         """
         if isinstance(connection, ParserPredicate):
             connection = rx.Regex(connection, _privated=None)
-        self._connect_last()
+        self.connect_last()
         self._last_token = connection
 
     def _consume_char(self) -> str:
@@ -156,7 +156,7 @@ class _RegexFactory:
         Returns:
             The character that was consumed
         """
-        ch = self._pattern[self._cur]
+        ch = self.pattern[self._cur]
         self._cur += 1
         return ch
 
@@ -171,7 +171,7 @@ class _RegexFactory:
         Returns:
             Whether or not the string was found and consumed
         """
-        if self._pattern[self._cur:].startswith(match):
+        if self.pattern[self._cur:].startswith(match):
             self._cur += len(match)
             return True
         return False
@@ -214,9 +214,9 @@ class _RegexFactory:
         if _started_at is None:
             _started_at = self._cur - 1
         try:
-            current_attempt = self._pattern.index(ch, self._cur)
+            current_attempt = self.pattern.index(ch, self._cur)
             while not predicate(current_attempt):
-                current_attempt = self._pattern.index(
+                current_attempt = self.pattern.index(
                     ch, current_attempt + len(ch))
             return current_attempt
         except ValueError as e:
@@ -224,13 +224,12 @@ class _RegexFactory:
                 raise PatternParseError(
                     (f"Could not find closing '{ch}' for opening "
                      f"'{_OPEN_CH_MAP[ch]}'"),
-                    self._pattern,
+                    self.pattern,
                     _started_at) from e
-            else:
-                raise PatternParseError(
-                    f"Could not find '{ch}', searching ",
-                    self._pattern,
-                    _started_at) from e
+            raise PatternParseError(
+                f"Could not find '{ch}', searching ",
+                self.pattern,
+                _started_at) from e
 
     def _consume_till_next(
             self,
@@ -255,7 +254,7 @@ class _RegexFactory:
             search string
         """
         find_index = self._find_next(ch, predicate)
-        result = self._pattern[self._cur:find_index]
+        result = self.pattern[self._cur:find_index]
         self._cur = find_index + len(ch)
         return result
 
@@ -270,9 +269,9 @@ class _RegexFactory:
         Returns:
             Whether the char is escaped
         """
-        while self._pattern[:at].endswith("\\\\"):
+        while self.pattern[:at].endswith("\\\\"):
             at -= 2
-        return self._pattern[:at].endswith("\\")
+        return self.pattern[:at].endswith("\\")
 
     def _is_unescaped(self, at: int) -> bool:
         """
@@ -288,7 +287,7 @@ class _RegexFactory:
         return not self._is_escaped(at)
 
     @staticmethod
-    def _chars_from_char_class(class_specifier: str) -> SignedSet[str]:
+    def chars_from_char_class(class_specifier: str) -> SignedSet[str]:
         """
         Produces the set of all chars that satisfy the given regular
         expression char. class specifier (see
@@ -358,18 +357,18 @@ class _RegexFactory:
             cur += 1
         return result
 
-    def _connect_last(self):
+    def connect_last(self):
         """Connect the {_last_token} to the Regex"""
         if self._last_token is not None:
-            self._regex += self._last_token
+            self.regex += self._last_token
             self._last_token = None
 
     def _require_previous(self):
         """Raise a parse exception if {_last_token} was not set"""
         if self._last_token is None:
             raise PatternParseError(
-                f"'{self._pattern[self._cur - 1]}' must be preceded by"
-                f" another token", self._pattern, self._cur - 1)
+                f"'{self.pattern[self._cur - 1]}' must be preceded by"
+                f" another token", self.pattern, self._cur - 1)
 
     def build(self, *, _nested: _NestedType = _NestedType.TOP) \
             -> 'rx.Regex':
@@ -379,22 +378,22 @@ class _RegexFactory:
         Returns:
             The final Regex produced
         """
-        while self._cur < len(self._pattern):
-            if self._parse_char(self._consume_char(), _nested):
+        while self._cur < len(self.pattern):
+            if self.parse_char(self._consume_char(), _nested):
                 break
-        self._connect_last()
+        self.connect_last()
         if _nested == _NestedType.TOP:
             # Only do optimisation on top-level
             # pylint: disable=protected-access
-            self._regex._debug("start")
+            self.regex._debug("start")
             # Loop until can match
             # self._regex.connect(self._regex.start,
             #                     self._regex.start,
             #                     MatchConditions.consume_any)
-            _OptimiseRegex(self._regex)
-        return self._regex
+            _OptimiseRegex(self.regex)
+        return self.regex
 
-    def _parse_escaped(self, char: str) -> None:
+    def parse_escaped(self, char: str) -> None:
         """
         Handle parsing of escaped chars in the pattern
 
@@ -410,15 +409,16 @@ class _RegexFactory:
             case ch if ch in _parser_symbols_escaped:
                 # if ch == 'A':
                 #     self._anchored = True
-                self._append(_parser_symbols_escaped[ch].copy())
+                self.append(_parser_symbols_escaped[ch].copy())
             case (ch, _) if ch in "\\.^$+*?[]{}()":
-                self._append(ConsumeString(ch))
+                self.append(ConsumeString(ch))
             case _:
                 raise PatternParseError(
                     f"Unexpected sequence: "
                     f"'\\{char}'")
 
-    def _parse_char(self, char: str, nested: _NestedType) -> bool:
+    # pylint: disable-next=design
+    def parse_char(self, char: str, nested: _NestedType) -> bool:
         """
         Handle parsing of chars in the pattern
 
@@ -434,12 +434,12 @@ class _RegexFactory:
             Whether the parse loop should break
         """
         if char == '\\':
-            self._parse_escaped(self._consume_char())
+            self.parse_escaped(self._consume_char())
             return False
         match char:
             # ^, $, ., etc...
             case ch if ch in _parser_symbols:
-                self._append(_parser_symbols[ch].copy())
+                self.append(_parser_symbols[ch].copy())
             case '?':  # Make _last_token optional
                 self._require_previous()
                 assert self._last_token is not None
@@ -452,30 +452,30 @@ class _RegexFactory:
                 # TODO: is this neccesary??
                 # i think it is now
                 # here again, thinking it still is
-                self._append(MatchConditions.epsilon_transition)
+                self.append(MatchConditions.epsilon_transition)
             case '*':  # Repeat 0+ times quantifier
                 self._require_previous()
                 assert self._last_token is not None
                 self._last_token = self._last_token.optional().repeated()
                 # see above
-                self._append(MatchConditions.epsilon_transition)
+                self.append(MatchConditions.epsilon_transition)
             case '[':  # Character class specifiers
                 negated = self._try_consume('^')
                 start_cur = self._cur
                 cls_specifier = self._consume_till_next(
                     ']', self._is_unescaped)
                 try:
-                    chars = self._chars_from_char_class(cls_specifier)
+                    chars = self.chars_from_char_class(cls_specifier)
                 except PatternParseError as e:
                     # Re-raise with context
-                    e.parse_src = self._pattern
+                    e.parse_src = self.pattern
                     if e.parse_idx is None:
                         e.parse_idx = 0
                     e.parse_idx += start_cur
                     raise e
                 if negated:
                     chars.negate()
-                self._append(ConsumeAny(chars))
+                self.append(ConsumeAny(chars))
             case '{':  # n-quantifier
                 self._require_previous()
                 assert self._last_token is not None
@@ -489,7 +489,7 @@ class _RegexFactory:
                     if not x.isnumeric():
                         raise PatternParseError(
                             "Invalid n-quantifier numeral",
-                            self._pattern,
+                            self.pattern,
                             start_cur + quantity_str.index(x.strip()))
                     return int(x)
                 quantity = tuple(map(
@@ -499,7 +499,7 @@ class _RegexFactory:
                     raise PatternParseError(
                         "Invalid n-quantifier: should have no more than"
                         " two values",
-                        self._pattern,
+                        self.pattern,
                         # Index of second comma
                         start_cur + quantity_str.index(
                             ',', quantity_str.index(',') + 1))
@@ -507,7 +507,7 @@ class _RegexFactory:
                 if quantity[-1] == 0:
                     raise PatternParseError(
                         "Invalid n-quantifier: max must be > 0",
-                        self._pattern, self._cur - 2)
+                        self.pattern, self._cur - 2)
                 # epsilon moves sandbox group and prevent loops escaping
                 self._last_token += MatchConditions.epsilon_transition
                 match quantity:
@@ -524,7 +524,7 @@ class _RegexFactory:
                             raise PatternParseError(
                                 "Invalid n-quantifier: max is smaller"
                                 " than min",
-                                self._pattern, start_cur)
+                                self.pattern, start_cur)
                     case (None | 0, int(m)):
                         self._last_token = (
                             self._last_token.optional() * m)
@@ -535,7 +535,7 @@ class _RegexFactory:
                     case _:
                         raise PatternParseError(
                             "Invalid n-quantifier syntax",
-                            self._pattern, start_cur)
+                            self.pattern, start_cur)
             case '(':  # group
                 start_pos = self._cur - 1
                 # TODO: Capture group time!
@@ -555,7 +555,7 @@ class _RegexFactory:
                 # Ensure that capture group will have closing bracket
                 _ = self._find_next(')', self._is_unescaped)
                 inner_builder = _RegexFactory(
-                    self._pattern,
+                    self.pattern,
                     _cursor=self._cur,
                     _cid=self._capture_auto_id,
                     _open_bracket_pos=start_pos)
@@ -568,7 +568,7 @@ class _RegexFactory:
                 # TODO: capture groups
                 # epsilon moves sandbox group and prevent loops escaping
                 inner_group += MatchConditions.epsilon_transition
-                self._append(inner_group)
+                self.append(inner_group)
                 if nested == _NestedType.NESTED_GROUP:
                     # Ensure that we still also have closing bracket
                     _ = self._find_next(')', self._is_unescaped,
@@ -577,7 +577,7 @@ class _RegexFactory:
                 if nested == _NestedType.TOP:
                     raise PatternParseError(
                         f"Unopened '{char}'",
-                        self._pattern, self._cur - 1)
+                        self.pattern, self._cur - 1)
                 if nested == _NestedType.NESTED_ALTERNATIVE:
                     self._cur -= 1  # Do not consume bracket
                 # Exit parse loop early, jump to outer group
@@ -585,13 +585,13 @@ class _RegexFactory:
             case '}' | ']':
                 raise PatternParseError(
                     f"Unopened '{char}'",
-                    self._pattern, self._cur - 1)
+                    self.pattern, self._cur - 1)
             case '|':  # or
                 start_cur = self._cur - 1
                 # TODO: is this safe?
                 # Parse RHS of expression
                 rh_builder = _RegexFactory(
-                    self._pattern,
+                    self.pattern,
                     _cursor=self._cur,
                     _cid=self._capture_auto_id,
                     _open_bracket_pos=self._cursor_started)
@@ -601,14 +601,14 @@ class _RegexFactory:
                 nest_type = (_NestedType.NESTED_ALTERNATIVE
                              if nested == _NestedType.TOP else nested)
                 rh_group = rh_builder.build(_nested=nest_type)
-                self._connect_last()
-                if not self._regex or not rh_group:
+                self.connect_last()
+                if not self.regex or not rh_group:
                     raise PatternParseError(
                         "'|' must have atleast one token on each side",
-                        self._pattern, start_cur)
-                self._regex |= rh_group
+                        self.pattern, start_cur)
+                self.regex |= rh_group
                 return True
             # All other chars:
             case ch:
-                self._append(ConsumeString(ch))
+                self.append(ConsumeString(ch))
         return False

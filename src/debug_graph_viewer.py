@@ -120,6 +120,7 @@ class DebugGraphViewer:
             font_size=int(30 / math.sqrt(
                 self._graph.number_of_nodes())))
 
+    # pylint: disable-next=too-many-locals
     def render(self) -> matplotlib.figure.Figure:
         """
         Render the current graph to a matplotlib Figure, ready for
@@ -150,8 +151,7 @@ class DebugGraphViewer:
         networkx.draw_networkx_labels(
             self._graph,
             self._layout,
-            labels={x: lbl for x, lbl
-                    in self._graph.nodes(data='label')}, # type: ignore
+            labels=dict(self._graph.nodes(data='label')), # type: ignore
             font_size=int(15 / math.sqrt(
                 self._graph.number_of_nodes())))
         # A list of edges for each connection between nodes

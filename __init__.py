@@ -9,8 +9,8 @@ Usage:
 
 __author__ = "Callum Hynes"
 
-from src import *
+from .src import *
 
 if __name__ == "__main__":
-    import test
-    test.run_tests()
+    from .test import run_tests
+    run_tests()
