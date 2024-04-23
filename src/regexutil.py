@@ -4,6 +4,7 @@ __all__ = ['_parser_symbols', '_parser_symbols_escaped', 'State',
            'ConsumeString', 'ConsumeAny', 'MatchConditions',
            'CaptureGroup']
 
+import itertools
 from typing import (Any, Callable, Generic, Iterable, Optional, Self,
                     TypeAlias, TypeVar, TypeVarTuple, overload,
                     override)
@@ -471,6 +472,70 @@ class ParserPredicate(ABC):
             The hash of the object
         """
         return hash(self)
+
+    @staticmethod
+    def _set_mutable_diff(
+            first: set['ParserPredicate'],
+            second: set['ParserPredicate']) -> set['ParserPredicate']:
+        """
+        Finds the difference of two sets, using an alternative hash
+        function
+
+        Returns:
+            A new set containing all the elements from the first set
+            that aren't in the second set
+        """
+        result = first - second
+        for el in second:
+            if el in first:
+                continue
+            if (alt_el := el.kind_of_in(first)) is not None:
+                result.remove(alt_el)
+        return result
+
+    @staticmethod
+    def _set_mutable_symdiff(
+            first: set['ParserPredicate'],
+            second: set['ParserPredicate']) -> set['ParserPredicate']:
+        """
+        Finds the symmetric difference of two sets, using an alternative
+        hash function
+
+        Returns:
+            A new set containing all the elements that are only in ONE
+            of the two sets
+        """
+        diff = first ^ second
+        for el in diff:
+            if ((el in first and
+                 (other := el.kind_of_in(second)) is not None)
+                or (el in second and
+                    (other := el.kind_of_in(first)) is not None)):
+                diff.remove(el)
+                diff.discard(other)
+        return diff
+        # result: dict[int, list[ParserPredicate]] = {}
+        # for el in first:
+        #     el_hash = el.mutable_hash()
+        #     if el_hash in result:
+        #         result[el_hash].append(el)
+        #     else:
+        #         result[el.mutable_hash()] = [el]
+        # for el in second:
+        #     el_hash = el.mutable_hash()
+        #     if el_hash in result:
+        #         # Dont need to iterate in reverse as we always leave
+        #         # after deleting a value
+        #         for i in range(len(result[el_hash])):
+        #             if result[el_hash][i] == el:
+        #                 # Remove el that is in both first and second
+        #                 result[el_hash].pop(i)
+        #                 break
+        #         else:
+        #             result[el_hash].append(el)
+        #     else:
+        #         result[el.mutable_hash()] = [el]
+        # return set(itertools.chain.from_iterable(result.values()))
 
     def kind_of_in(self, collection: Iterable['ParserPredicate'])\
             -> 'ParserPredicate | None':

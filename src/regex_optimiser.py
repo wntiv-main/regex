@@ -2,7 +2,6 @@ __author__ = "Callum Hynes"
 __all__ = ["_optimise_regex"]
 
 from abc import ABC, abstractmethod
-import itertools
 from typing import Callable, Iterable, Self, override
 import weakref
 
@@ -171,41 +170,6 @@ class _optimise_regex(_MovingIndexHandler):
         self.todo = set(map(self.index, range(self.regex.size)))
         self.optimise()
 
-    @staticmethod
-    def _mutable_diff(first: set[ParserPredicate],
-                      second: set[ParserPredicate])\
-            -> set[ParserPredicate]:
-        """
-        Finds the symmetric difference of two sets, using an alternative
-        hash function
-
-        Returns:
-            A new set containing all the elements that are only in ONE
-            of the two sets
-        """
-        result: dict[int, list[ParserPredicate]] = {}
-        for el in first:
-            el_hash = el.mutable_hash()
-            if el_hash in result:
-                result[el_hash].append(el)
-            else:
-                result[el.mutable_hash()] = [el]
-        for el in second:
-            el_hash = el.mutable_hash()
-            if el_hash in result:
-                # Dont need to iterate in reverse as we always leave
-                # after deleting a value
-                for i in range(len(result[el_hash])):
-                    if result[el_hash][i] == el:
-                        # Remove el that is in both first and second
-                        result[el_hash].pop(i)
-                        break
-                else:
-                    result[el_hash].append(el)
-            else:
-                result[el.mutable_hash()] = [el]
-        return set(itertools.chain.from_iterable(result.values()))
-
     def can_minify_inputs(self, s1: State, s2: State) -> bool:
         """
         Compares the inputs of two states
@@ -218,7 +182,7 @@ class _optimise_regex(_MovingIndexHandler):
             return False
         for i in range(self.regex.size):
             if i == s1 or i == s2:
-                diff = _optimise_regex._mutable_diff(
+                diff = ParserPredicate._set_mutable_symdiff(
                     self.regex.edge_map[i, s1],
                     self.regex.edge_map[i, s2])
                 for edge in diff:
@@ -249,7 +213,7 @@ class _optimise_regex(_MovingIndexHandler):
             return False
         for i in range(self.regex.size):
             if i == s1 or i == s2:
-                diff = _optimise_regex._mutable_diff(
+                diff = ParserPredicate._set_mutable_symdiff(
                     self.regex.edge_map[s1, i],
                     self.regex.edge_map[s2, i])
                 for edge in diff:
@@ -351,7 +315,11 @@ class _optimise_regex(_MovingIndexHandler):
             # Reset outer loop to give other states a chance to run
             self.todo.add(self.index(start))
             start.reset_iteration()
-
+        else:
+            # Merge outputs in the hope that these states can be merged
+            if self.regex._merge_outputs(start.value(), end.value()):
+                self.todo.add(self.index(start))
+            self.regex._debug(f"mrgd out {start} <- {end}")
         # self.regex.edge_map[start, end].remove(
         #     MatchConditions.epsilon_transition)
         # self.regex._merge_inputs(end, start)

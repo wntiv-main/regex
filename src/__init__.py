@@ -1,7 +1,8 @@
 __author__ = "Callum Hynes"
 __all__ = ["Regex", "State"]
 
-from typing import Any, Callable, Iterable, Self, Sequence, overload
+from ast import TypeAlias
+from typing import Any, Callable, Iterable, Mapping, Self, Sequence, overload
 try:
     import numpy as np
 except ImportError as e:
@@ -271,37 +272,75 @@ class Regex:
                 state, 0),
             state, 1)
 
-    def _merge_outputs(self, destination: State, source: State) -> None:
+    def _merge_outputs(self, destination: State, source: State) -> bool:
         """
         Copy the outputs of one state to another.
 
         Arguments:
             destination -- The state to copy outputs to.
             source -- The state to copy outputs from.
+
+        Returns:
+            Whether any actual changes were made during the merge
         """
+        assert destination >= 0
+        assert destination < self.size
+        assert source >= 0
+        assert source < self.size
+        changed = False
         # Iterate s2 row and make same connections from s1
         it = np.nditer(self.edge_map[source, :],
                        flags=['c_index', 'refs_ok'])
         for edges in it:
             # thank numpy for [()]
-            self.connect_many(destination, it.index,
-                              edges[()]) # type: ignore
+            src_set = edges[()]  # type: ignore
+            dst_set = self.edge_map[destination, it.index]
+            if changed:
+                pass  # Fast path, don't perform more comparisons
+            elif (len(src_set) > len(dst_set)):
+                # More elements, definately changed
+                changed = True
+            elif ParserPredicate._set_mutable_diff(src_set, dst_set):
+                changed = True
+            else:  # Skip merge if no changes made (small optimisation)
+                continue
+            self.connect_many(destination, it.index, src_set)
+        return changed
 
-    def _merge_inputs(self, destination: State, source: State) -> None:
+    def _merge_inputs(self, destination: State, source: State) -> bool:
         """
         Copy the inputs of one state to another.
 
         Arguments:
             destination -- The state to copy inputs to.
             source -- The state to copy inputs from.
+
+        Returns:
+            Whether any actual changes were made during the merge
         """
+        assert destination >= 0
+        assert destination < self.size
+        assert source >= 0
+        assert source < self.size
+        changed = False
         # Iterate s2 column and make same connections to s1
         it = np.nditer(self.edge_map[:, source],
                        flags=['c_index', 'refs_ok'])
         for edges in it:
             # thank numpy for [()]
-            self.connect_many(it.index, destination,
-                              edges[()]) # type: ignore
+            src_set = edges[()]  # type: ignore
+            dst_set = self.edge_map[it.index, destination]
+            if changed:
+                pass  # Fast path, don't perform more comparisons
+            elif (len(src_set) > len(dst_set)):
+                # More elements, definately changed
+                changed = True
+            elif ParserPredicate._set_mutable_symdiff(src_set, dst_set):
+                changed = True
+            else:  # Skip merge if no changes made (small optimisation)
+                continue
+            self.connect_many(it.index, destination, src_set)
+        return changed
 
     def _merge(self, destination: State, source: State) -> None:
         """
@@ -555,3 +594,27 @@ class Regex:
                 if isinstance(edges, set) else "{}"
                 for edges in row])
             for row in self.edge_map]), self.start, self.end)
+
+    def _find_double_refs(self) -> Mapping[int, set[tuple[int, ...]]]:
+        """
+        Searches the Regex for connections which share a set object,
+        i.e. they hold a reference to the same object. Used for
+        debugging parts of the builder and optimiser which create, move
+        or clone parts of the matrix around
+
+        Returns:
+            A map of memory addresses to a set of coordinates which all
+            reference to that memory address, excluding the cases where
+            there is only one reference to that address
+        """
+        coord_map: dict[int, set[tuple[int, ...]]] = {}
+        it = np.nditer(self.edge_map,
+                       flags=['multi_index', 'refs_ok'])
+        for el in it:
+            # thx numpy [()]
+            el_id = id(el[()])  # type: ignore
+            if el_id in coord_map:
+                coord_map[el_id].add(it.multi_index)
+            else:
+                coord_map[el_id] = set((it.multi_index,))
+        return {k: v for k, v in coord_map.items() if len(v) > 1}

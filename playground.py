@@ -23,6 +23,7 @@ def main():
         fig.canvas.manager.set_window_title(msg)  # type: ignore
         mfv.add(fig)
         print(f"{msg}:\n{rx}")
+        print(f"dupls: {rx._find_double_refs()}")
     Regex._debug_function = debug
     try:
         rx = Regex(r"a{,3}")
