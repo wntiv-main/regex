@@ -6,7 +6,13 @@
 			"hide": true,
 			"command": "${command:python.interpreterPath}",
 			"type": "shell",
-			"args": ["-m", "pip", "uninstall", "${workspaceFolderBasename}"]
+			"args": [
+				"-m",
+				"pip",
+				"uninstall",
+				"${workspaceFolderBasename}",
+				"-y"
+			]
 		},
 		{
 			"label": "Setup module",
