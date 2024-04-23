@@ -2,7 +2,9 @@ __author__ = "Callum Hynes"
 __all__ = ["run_tests"]
 
 from src.regexutil import MatchConditions
-from .regex_tests import NodeMatcher, RegexState, TestNoParseError, TestParseError, TestRegexMatches, TestRegexShape
+from .regex_tests import (NodeMatcher, RegexState, TestNoParseError,
+                          TestParseError, TestRegexMatches,
+                          TestRegexShape)
 from .test import ResultType, TestCase, TestType, _copy_html
 
 

@@ -5,12 +5,15 @@ __all__ = ["RegexState", "NodeMatcher", "TestRegexShape",
 from enum import IntEnum, auto
 from typing import Callable, Literal, Self, assert_never, override
 
-from src.debug_graph_viewer import DebugGraphViewer, MultiFigureViewer
+if __debug__:
+    from src.debug_graph_viewer import (DebugGraphViewer,
+                                        MultiFigureViewer)
 from src import Regex
 from src.regex_factory import PatternParseError
 from src.regexutil import (ConsumeAny, ConsumeString, ParserPredicate,
                            SignedSet, State)
-from .test import AssertNoRaises, AssertRaises, ResultType, TestCase, TestType
+from .test import (AssertNoRaises, AssertRaises, ResultType, TestCase,
+                   TestType)
 from .test_error import (EdgeNotFoundError, ExtraEdgesError,
                          RegexMatchError, StateIdentityError)
 
@@ -432,9 +435,9 @@ class TestRegexShape(TestCase):
     that the decorated function is able to describe the expected "shape"
     of the Regex
     """
-
-    _failed_regex: MultiFigureViewer = MultiFigureViewer()
-    """A viewer containing diagrams of all of the failed test cases"""
+    if __debug__:
+        _failed_regex: MultiFigureViewer = MultiFigureViewer()
+        """A viewer containing diagrams of all the failed test cases"""
 
     _pattern: str
     """The Regex pattern to use"""
