@@ -7,18 +7,20 @@ __all__ = ["RegexState", "NodeMatcher", "TestRegexShape",
 from enum import IntEnum, auto
 from typing import Callable, Literal, Self, assert_never, override
 
+from regex import Regex
+from regex.regex_factory import PatternParseError
+from regex.regexutil import (ConsumeAny, ConsumeString, ParserPredicate,
+                             SignedSet, State)
+
 from .test import (AssertNoRaises, AssertRaises, ResultType, TestCase,
                    TestType)
 from .test_error import (EdgeNotFoundError, ExtraEdgesError,
                          RegexMatchError, StateIdentityError)
 
-from regex import Regex
-from regex.regex_factory import PatternParseError
-from regex.regexutil import (ConsumeAny, ConsumeString, ParserPredicate,
-                             SignedSet, State)
 if __debug__:
     from regex.debug_graph_viewer import (DebugGraphViewer,
                                           MultiFigureViewer)
+
 
 
 class RegexState(IntEnum):

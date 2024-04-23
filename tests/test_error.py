@@ -8,10 +8,10 @@ __all__ = ["TestError", "TestErrorImpl", "ExceptionAsTestError",
 from abc import ABC, abstractmethod
 from typing import assert_never, override
 
-from . import regex_tests
-
 from regex import Regex
 from regex.regexutil import ParserPredicate, State
+
+from . import regex_tests
 
 
 class TestError(Exception, ABC):
