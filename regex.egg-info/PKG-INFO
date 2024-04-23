@@ -1,0 +1,17 @@
+Metadata-Version: 2.1
+Name: regex
+Version: 0.0.1
+Summary: Regular expression library using deterministic finite automaton (DFA) to build and evaluate regular expressions efficiently
+Home-page: https://github.com/wntiv-main/regex
+Author: Callum Hynes
+Author-email: hynescj20@cashmere.school.nz
+License: None
+Keywords: regular expression,DFA
+Requires-Dist: numpy
+Provides-Extra: debuggraphviewer
+Requires-Dist: matplotlib; extra == "debuggraphviewer"
+Requires-Dist: networkx; extra == "debuggraphviewer"
+Requires-Dist: scipy; extra == "debuggraphviewer"
+Requires-Dist: PyQt5; extra == "debuggraphviewer"
+Provides-Extra: copy-html
+Requires-Dist: pywin32; extra == "copy-html"

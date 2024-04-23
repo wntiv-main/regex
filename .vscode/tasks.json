@@ -1,0 +1,33 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Clean up module",
+			"hide": true,
+			"command": "${command:python.interpreterPath}",
+			"type": "shell",
+			"args": ["-m", "pip", "uninstall", "${workspaceFolderBasename}"]
+		},
+		{
+			"label": "Setup module",
+			"hide": true,
+			"command": "${command:python.interpreterPath}",
+			"type": "shell",
+			"args": ["${workspaceFolder}/setup.py", "sdist"],
+			"dependsOn": []
+		},
+		{
+			"label": "Import module",
+			"hide": true,
+			"command": "${command:python.interpreterPath}",
+			"type": "shell",
+			"args": [
+				"-m",
+				"pip",
+				"install",
+				"${workspaceFolder}/dist/${workspaceFolderBasename}-${config:module.version}.tar.gz"
+			],
+			"dependsOn": ["Setup module"]
+		}
+	]
+}

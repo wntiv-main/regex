@@ -8,8 +8,10 @@
 			"name": "Python: Run Tests",
 			"type": "debugpy",
 			"request": "launch",
-			"program": "${workspaceFolder}/__init__.py",
-			"console": "integratedTerminal"
+			"program": "${workspaceFolder}/test.py",
+			"console": "integratedTerminal",
+			"preLaunchTask": "Import module",
+			"postDebugTask": "Clean up module"
 		},
 		{
 			"name": "Python: Run Playground",

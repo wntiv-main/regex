@@ -1,0 +1,10 @@
+numpy
+
+[DebugGraphViewer]
+matplotlib
+networkx
+scipy
+PyQt5
+
+[_copy_html]
+pywin32

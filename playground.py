@@ -3,8 +3,8 @@
 import traceback
 # In production, this would be a seperate package, and would thus be
 # imported with something akin to `from regex import Regex`
-from src import Regex
-from src.debug_graph_viewer import MultiFigureViewer, DebugGraphViewer
+from regex import Regex
+from regex.debug_graph_viewer import MultiFigureViewer, DebugGraphViewer
 
 
 def main():
