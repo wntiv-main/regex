@@ -20,4 +20,4 @@ jobs:
         pip install numpy
     - name: Running tests
       run: |
-        python __init__.py > $GITHUB_STEP_SUMMARY
+        python -O __init__.py

@@ -3,7 +3,7 @@ __all__ = ["run_tests"]
 
 from src.regexutil import MatchConditions
 from .regex_tests import NodeMatcher, RegexState, TestNoParseError, TestParseError, TestRegexMatches, TestRegexShape
-from .test import TestCase, TestType, _copy_html
+from .test import ResultType, TestCase, TestType, _copy_html
 
 
 # Digits
@@ -263,7 +263,12 @@ TestNoParseError(r'a{3,5}')
 def run_tests():
     """Run all tests and output to user"""
     print("TEST SUMMARY:")
-    print(TestCase.format_results_table(TestCase.run_cases()))
-    _copy_html(TestCase.produce_html_printout())
-    print("Ran all tests: full results in clipboard")
-    TestRegexShape._failed_regex.display()
+    results = TestCase.run_cases()
+    print(TestCase.format_results_table(results))
+    if __debug__:
+        _copy_html(TestCase.produce_html_printout())
+        print("Ran all tests: full results in clipboard")
+        TestRegexShape._failed_regex.display()
+    failed = sum([tests[ResultType.FAIL] + tests[ResultType.ERROR]
+                  for tests in results.values()])
+    exit(failed)
