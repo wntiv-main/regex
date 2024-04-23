@@ -1,12 +1,15 @@
+"""Playground for debug testing"""
+# pylint: disable=all
+
 import traceback
 # In production, this would be a seperate package, and would thus be
 # imported with something akin to `from regex import Regex`
 from src import Regex
-from src.debug_graph_viewer import (MultiFigureViewer, DebugGraphViewer,
-                                    test_layouts_for)
+from src.debug_graph_viewer import MultiFigureViewer, DebugGraphViewer
 
 
 def main():
+    """Main function, called on execution"""
     # r"(fn|(\w+)) \(((\w+)\s*(\w+))*\)\s*(=>\s*(\w+))?"
     # r"^(?P<user>(?:\w|\.|\+|-)+)@(?P<domain>(?:\w+\.)+\w+)$"
     # rx = RegexBuilder(
@@ -31,6 +34,7 @@ def main():
         mfv.add(DebugGraphViewer(rx.edge_map,
                                  rx.start, rx.end).render())
     except Exception:
+        # Print exception, still show viewer
         traceback.print_exc()
     finally:
         mfv.display()

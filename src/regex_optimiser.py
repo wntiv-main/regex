@@ -1,5 +1,7 @@
+"""Utilities for converting an NFA to a DFA, and optimising it"""
+
 __author__ = "Callum Hynes"
-__all__ = ["_optimise_regex"]
+__all__ = ["_OptimiseRegex"]
 
 from abc import ABC, abstractmethod
 from typing import Callable, Iterable, Self, override
@@ -57,6 +59,7 @@ class _MovingIndexHandler(ABC):
         Arguments:
             index -- The index of the removed element
         """
+        # pylint: disable=protected-access
         if isinstance(index, _MovingIndex):
             index = index.value()
         for inst in self._instances:
@@ -139,12 +142,13 @@ class _MovingIndex:
         return str(self._internal_index)
 
 
-# snake-case name as functional-like interface
-class _optimise_regex(_MovingIndexHandler):
+class _OptimiseRegex(_MovingIndexHandler):
     """
     Optimises a Regex to use minimal states without any epsilon moves or
     non-deterministic junctions
     """
+    # Required a lot of access to Regex objects
+    # pylint: disable=protected-access
 
     regex: 'rx.Regex'
     """The Regex to optimise"""
@@ -178,11 +182,11 @@ class _optimise_regex(_MovingIndexHandler):
             Whether the two states' inputs are similar enough that the
             states can be merged
         """
-        if s1 == s2 or s1 == self.regex.start or s2 == self.regex.start:
+        if s1 == s2 or self.regex.start in {s1, s2}:
             return False
         for i in range(self.regex.size):
-            if i == s1 or i == s2:
-                diff = ParserPredicate._set_mutable_symdiff(
+            if i in {s1, s2}:
+                diff = ParserPredicate.set_mutable_symdiff(
                     self.regex.edge_map[i, s1],
                     self.regex.edge_map[i, s2])
                 for edge in diff:
@@ -203,7 +207,7 @@ class _optimise_regex(_MovingIndexHandler):
             states can be merged
         """
         if s1 == s2 or (
-            (s1 == self.regex.end or s2 == self.regex.end)
+            self.regex.end in {s1, s2}
             and not MatchConditions.epsilon_transition in
             self.regex.edge_map[
                 # NOT end state
@@ -212,8 +216,8 @@ class _optimise_regex(_MovingIndexHandler):
                 self.regex.end]):
             return False
         for i in range(self.regex.size):
-            if i == s1 or i == s2:
-                diff = ParserPredicate._set_mutable_symdiff(
+            if i in {s1, s2}:
+                diff = ParserPredicate.set_mutable_symdiff(
                     self.regex.edge_map[s1, i],
                     self.regex.edge_map[s2, i])
                 for edge in diff:

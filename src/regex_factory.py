@@ -1,3 +1,5 @@
+"""Utilities for constructing and parsing a Regex"""
+
 __author__ = "Callum Hynes"
 __all__ = ['PatternParseError', '_RegexFactory']
 
@@ -5,7 +7,7 @@ from enum import IntEnum, auto
 from typing import Callable
 
 import src as rx  # type annotating
-from .regex_optimiser import _optimise_regex
+from .regex_optimiser import _OptimiseRegex
 from .regexutil import (CaptureGroup, ConsumeAny, ConsumeString,
                         MatchConditions, ParserPredicate, SignedSet,
                         _parser_symbols, _parser_symbols_escaped)
@@ -86,6 +88,8 @@ class _NestedType(IntEnum):
 
 
 class _RegexFactory:
+    """Factory class to parse and construct a Regex"""
+
     _regex: 'rx.Regex'
     """The Regex being currently built"""
 
@@ -172,12 +176,16 @@ class _RegexFactory:
             return True
         return False
 
+    # Dangerous default value intentionally used to avoid
+    # re-initialization of a constant value ("static" initialization),
+    # for performance
+    # pylint: disable=dangerous-default-value
     def _find_next(
             self,
             ch: str,
             predicate: Callable[[int], bool] = lambda _: True,
             *, _started_at: int | None = None,
-            _OPEN_CH_MAP={  # Static object, initialized only once
+            _OPEN_CH_MAP={
                 ']': '[',
                 '}': '{',
                 ')': '(',
@@ -377,12 +385,13 @@ class _RegexFactory:
         self._connect_last()
         if _nested == _NestedType.TOP:
             # Only do optimisation on top-level
+            # pylint: disable=protected-access
             self._regex._debug("start")
             # Loop until can match
             # self._regex.connect(self._regex.start,
             #                     self._regex.start,
             #                     MatchConditions.consume_any)
-            _optimise_regex(self._regex)
+            _OptimiseRegex(self._regex)
         return self._regex
 
     def _parse_escaped(self, char: str) -> None:
@@ -530,6 +539,8 @@ class _RegexFactory:
             case '(':  # group
                 start_pos = self._cur - 1
                 # TODO: Capture group time!
+                # Will use later maybe!
+                # pylint: disable=unused-variable
                 capture_group: CaptureGroup | None = None
                 if self._try_consume("?:"):
                     # Non-capturing group
@@ -551,6 +562,7 @@ class _RegexFactory:
                 inner_group = inner_builder.build(
                     _nested=_NestedType.NESTED_GROUP)
                 # Copy new state
+                # pylint: disable=protected-access
                 self._cur = inner_builder._cur
                 self._capture_auto_id = inner_builder._capture_auto_id
                 # TODO: capture groups
@@ -583,6 +595,7 @@ class _RegexFactory:
                     _cursor=self._cur,
                     _cid=self._capture_auto_id,
                     _open_bracket_pos=self._cursor_started)
+                # pylint: disable=protected-access
                 self._cur = rh_builder._cur
                 self._capture_auto_id = rh_builder._capture_auto_id
                 nest_type = (_NestedType.NESTED_ALTERNATIVE

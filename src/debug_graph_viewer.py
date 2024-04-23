@@ -1,3 +1,8 @@
+"""
+Debug utilities, such as GUI viewers for the milti-digraph structures
+such as the automatons used to represent regular expressions
+"""
+
 __author__ = "Callum Hynes"
 __all__ = ['DebugGraphViewer', 'MultiFigureViewer', 'test_layouts_for']
 
@@ -14,10 +19,11 @@ try:
     import matplotlib.figure
     from matplotlib.widgets import Button
 except ImportError:
+    import sys
     print("If you wish to proceed to display the debug graphic, "
           "`$ pip install networkx`, `$ pip install matplotlib`, "
           "`$ pip install pyqt5`, and `$ pip install scipy`")
-    quit()
+    sys.exit(1)
 from . import networkx_curved_label
 
 T = TypeVar('T')
@@ -46,7 +52,7 @@ class DebugGraphViewer:
             graph: np.ndarray,
             start_idx: int,
             end_idx: int,
-            layout=networkx.layout.kamada_kawai_layout):
+            layout=nxlayout.kamada_kawai_layout):
         """
         Creates a visual graph of the given graph.
 
@@ -264,6 +270,7 @@ class MultiFigureViewer:
                     # Unix only??
                     fig.canvas.manager \
                         .window.state('zoomed') # type: ignore
+                # pylint: disable=broad-exception-caught
                 except Exception:
                     fig.canvas.manager.resize( # type: ignore
                         *fig.canvas.manager
@@ -271,25 +278,15 @@ class MultiFigureViewer:
 
         self._figures.append(fig)
 
-    def next(self, e) -> None:
-        """
-        Button press handler to go to next figure.
-
-        Arguments:
-            e -- The button press event
-        """
+    def next(self, _) -> None:
+        """Button press handler to go to next figure"""
         self._current += 1
         if self._current >= len(self._figures):
             self._current = 0
         self._display()
 
-    def prev(self, e) -> None:
-        """
-        Button press handler to go to previous figure.
-
-        Arguments:
-            e -- The button press event
-        """
+    def prev(self, _) -> None:
+        """Button press handler to go to previous figure"""
         self._current -= 1
         if self._current < 0:
             self._current = len(self._figures) - 1
@@ -343,6 +340,7 @@ def test_layouts_for(graph: np.ndarray,
         viewer = DebugGraphViewer(graph, start_idx, end_idx, layout)
         try:
             fig = viewer.render()
+        # pylint: disable=broad-exception-caught
         except Exception:  # If layout errs, just skip
             continue
         fig.canvas.manager.set_window_title(name) # type: ignore

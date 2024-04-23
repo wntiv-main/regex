@@ -1,7 +1,11 @@
+"""
+Regular expression library for constructing and evaluating regular
+expressions on given strings
+"""
+
 __author__ = "Callum Hynes"
 __all__ = ["Regex", "State"]
 
-from ast import TypeAlias
 from typing import Any, Callable, Iterable, Mapping, Self, Sequence, overload
 try:
     import numpy as np
@@ -42,6 +46,7 @@ class Regex:
         if __debug__:
             Regex._debug_function(self, msg)
 
+    # pylint: disable=no-member
     edge_map: np.ndarray[Any, np.dtypes.ObjectDType]
     """
     A 2D array (or matrix) of sets of transitions, so that from a given
@@ -66,13 +71,11 @@ class Regex:
         Arguments:
             pattern -- the pattern to match, as a string
         """
-        ...
 
     @overload
     # Require _privated arg to prevent accidental use
     def __new__(cls, *, _privated: None) -> Self:
         """Creates an empty regex object, only used internally"""
-        ...
 
     @overload
     def __new__(
@@ -84,7 +87,6 @@ class Regex:
         Arguments:
             other -- The regex to copy from.
         """
-        ...
 
     @overload
     # Require _privated arg to prevent accidental use
@@ -99,7 +101,6 @@ class Regex:
         Arguments:
             predicate -- The transition connecting start to end
         """
-        ...
 
     # Implementation of above
     def __new__(cls, *args, **kwargs) -> Self:
@@ -300,7 +301,7 @@ class Regex:
             elif (len(src_set) > len(dst_set)):
                 # More elements, definately changed
                 changed = True
-            elif ParserPredicate._set_mutable_diff(src_set, dst_set):
+            elif ParserPredicate.set_mutable_diff(src_set, dst_set):
                 changed = True
             else:  # Skip merge if no changes made (small optimisation)
                 continue
@@ -335,7 +336,7 @@ class Regex:
             elif (len(src_set) > len(dst_set)):
                 # More elements, definately changed
                 changed = True
-            elif ParserPredicate._set_mutable_symdiff(src_set, dst_set):
+            elif ParserPredicate.set_mutable_symdiff(src_set, dst_set):
                 changed = True
             else:  # Skip merge if no changes made (small optimisation)
                 continue
@@ -518,17 +519,17 @@ class Regex:
         """
         return self.size > 1 or bool(self.edge_map[0, 0])
 
-    def is_in(self, input: str) -> bool:
+    def is_in(self, value: str) -> bool:
         """
         Tries to match the current regex to the given string.
 
         Arguments:
-            input -- The string to match against.
+            value -- The string to match against.
 
         Returns:
             Whether the Regex was found in the string.
         """
-        ctx = MatchConditions(input)
+        ctx = MatchConditions(value)
         state = self.start
         while state != self.end:
             for i in range(self.size):
@@ -588,12 +589,13 @@ class Regex:
         Returns:
             The formatted string.
         """
-        return "[%s]: %d -> %d" % (',\n '.join([
-            "[%s]" % ', '.join([
+        inner_arrs = ',\n '.join([
+            "[" + ', '.join([
                 f"{{{', '.join([str(edge) for edge in edges])}}}"
                 if isinstance(edges, set) else "{}"
-                for edges in row])
-            for row in self.edge_map]), self.start, self.end)
+                for edges in row]) + "]"
+            for row in self.edge_map])
+        return f"[{inner_arrs}]: {self.start} -> {self.end}"
 
     def _find_double_refs(self) -> Mapping[int, set[tuple[int, ...]]]:
         """

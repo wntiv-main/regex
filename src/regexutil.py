@@ -1,10 +1,11 @@
+"""Utility classes to help regular expression matching"""
+
 __author__ = "Callum Hynes"
 __all__ = ['_parser_symbols', '_parser_symbols_escaped', 'State',
            'SignedSet', 'ParserPredicate', 'GenericParserPredicate',
            'ConsumeString', 'ConsumeAny', 'MatchConditions',
            'CaptureGroup']
 
-import itertools
 from typing import (Any, Callable, Generic, Iterable, Optional, Self,
                     TypeAlias, TypeVar, TypeVarTuple, overload,
                     override)
@@ -110,7 +111,7 @@ class SignedSet(Generic[T]):
         Returns:
             Whether the value was in the set
         """
-        return (self._negate ^ (value in self._accept))
+        return self._negate ^ (value in self._accept)
 
     @overload
     @staticmethod
@@ -121,6 +122,7 @@ class SignedSet(Generic[T]):
     def union(self, *others: 'SignedSet[T]') -> 'SignedSet[T]':
         ...
 
+    # pylint: disable=no-self-argument
     def union(*sets):  # type: ignore
         """
         Finds the union of the given sets, the set containing all of the
@@ -142,6 +144,7 @@ class SignedSet(Generic[T]):
             The current instance
         """
         for el in sets:
+            # pylint: disable=protected-access
             match self._negate, el._negate:
                 case False, False:
                     self._accept |= el._accept
@@ -165,6 +168,7 @@ class SignedSet(Generic[T]):
     def intersection(self, *others: 'SignedSet[T]') -> 'SignedSet[T]':
         ...
 
+    # pylint: disable=no-self-argument
     def intersection(*sets):  # type: ignore
         """
         Finds the intersection of the given sets, the set of all
@@ -186,6 +190,7 @@ class SignedSet(Generic[T]):
             The current instance
         """
         for el in sets:
+            # pylint: disable=protected-access
             match self._negate, el._negate:
                 case False, False:
                     self._accept &= el._accept
@@ -208,6 +213,7 @@ class SignedSet(Generic[T]):
         Returns:
             A new SignedSet, the symmetric difference of the two sets
         """
+        # pylint: disable=protected-access
         match self._negate, other._negate:
             case (False, False) | (True, True):
                 return SignedSet(self._accept ^ other._accept)
@@ -228,6 +234,7 @@ class SignedSet(Generic[T]):
         Returns:
             The current instance
         """
+        # pylint: disable=protected-access
         match self._negate, other._negate:
             case False, False:
                 self._accept ^= other._accept
@@ -248,6 +255,7 @@ class SignedSet(Generic[T]):
         Returns:
             A new SignedSet, the difference of the two sets
         """
+        # pylint: disable=protected-access
         match self._negate, other._negate:
             case False, False:
                 return SignedSet(self._accept - other._accept)
@@ -269,6 +277,7 @@ class SignedSet(Generic[T]):
         Returns:
             The current instance
         """
+        # pylint: disable=protected-access
         match self._negate, other._negate:
             case False, False:
                 self._accept -= other._accept
@@ -395,7 +404,7 @@ class ParserPredicate(ABC):
 
     __doc__: Optional[str] = None
     """Documentation string for this predicate"""
-    
+
     @abstractmethod
     def evaluate(self, ctx: 'MatchConditions') -> bool:
         """
@@ -407,7 +416,6 @@ class ParserPredicate(ABC):
         Returns:
             Whether the predicate should match
         """
-        ...
 
     @overload
     def __call__(self, func: Callable) -> Self:
@@ -417,7 +425,6 @@ class ParserPredicate(ABC):
         Returns:
             The current instance in place of the decorated function.
         """
-        ...
 
     @overload
     def __call__(self, ctx: 'MatchConditions') -> bool:
@@ -430,7 +437,6 @@ class ParserPredicate(ABC):
         Returns:
             Whether the predicate should match
         """
-        ...
 
     def __call__(self, *args):
         match args:
@@ -474,7 +480,7 @@ class ParserPredicate(ABC):
         return hash(self)
 
     @staticmethod
-    def _set_mutable_diff(
+    def set_mutable_diff(
             first: set['ParserPredicate'],
             second: set['ParserPredicate']) -> set['ParserPredicate']:
         """
@@ -494,7 +500,7 @@ class ParserPredicate(ABC):
         return result
 
     @staticmethod
-    def _set_mutable_symdiff(
+    def set_mutable_symdiff(
             first: set['ParserPredicate'],
             second: set['ParserPredicate']) -> set['ParserPredicate']:
         """
@@ -674,6 +680,8 @@ class GenericParserPredicate(ParserPredicate):
 
 
 class ConsumeString(ParserPredicate):
+    """Predicate to match and consume a specific string"""
+
     match_string: str
     """The string that this predicate matches"""
 
@@ -682,6 +690,7 @@ class ConsumeString(ParserPredicate):
 
     @override
     def evaluate(self, ctx: 'MatchConditions') -> bool:
+        # pylint: disable=protected-access
         if (ctx._cursor + len(self.match_string) <= len(ctx._string)
             and ctx._string[ctx._cursor:][0:len(self.match_string)]
                 == self.match_string):
@@ -718,14 +727,17 @@ class ConsumeString(ParserPredicate):
 
 
 class ConsumeAny(ParserPredicate):
+    """Predicate which matches and consumes any char in a set"""
+
     match_set: SignedSet[str]
-    """The set of strings that this preddicate matches for"""
+    """The set of strings that this predicate matches for"""
 
     def __init__(self, match_set: SignedSet[str] | Iterable[str]) -> None:
         self.match_set = SignedSet(match_set)
 
     @override
     def evaluate(self, ctx: 'MatchConditions') -> bool:
+        # pylint: disable=protected-access
         if (not ctx.end(ctx) and
                 ctx._string[ctx._cursor] in self.match_set):
             ctx._cursor += 1
@@ -777,12 +789,12 @@ class ConsumeAny(ParserPredicate):
     def copy(self) -> 'ConsumeAny':
         return ConsumeAny(self.match_set.copy())
 # endregion parser predicates
-        
+
 
 P = TypeVar("P", bound=ParserPredicate)
 
 
-class _represented_by:
+class _RepresentedBy:
     """Simple decorator to populate _parser_symbols(_escaped)"""
 
     _symbol: str
@@ -813,6 +825,11 @@ class _represented_by:
 
 
 class MatchConditions:
+    """
+    A string buffer with methods for conditional consumption of the
+    string
+    """
+
     _alpha = {chr(i) for i in range(ord('a'), ord('z') + 1)}\
         | {chr(i) for i in range(ord('A'), ord('Z') + 1)}
     """Set of alphabetical chars"""
@@ -838,64 +855,57 @@ class MatchConditions:
     @ConsumeAny(SignedSet(negate=True))
     def consume_any(self):
         """Always matches, and consumes a char"""
-        ...
 
 # region regex tokens
-    @_represented_by(symbol="d", escaped=True)
+    # Pylint fails to recognise __neg__ defined on ConsumeAny instances
+    # pylint: disable=invalid-unary-operand-type
+    @_RepresentedBy(symbol="d", escaped=True)
     @ConsumeAny(_digits)
     def consume_digit(self):
         """Matches and consumes any digit char"""
-        ...
 
-    @_represented_by("D", escaped=True)
+    @_RepresentedBy("D", escaped=True)
     @-consume_digit
     def consume_not_digit(self):
         """Matches and consumes any non-digit char"""
-        ...
 
-    @_represented_by("w", escaped=True)
+    @_RepresentedBy("w", escaped=True)
     @ConsumeAny(_alpha | _digits | {"_"})
     def consume_alphanum(self):
         """Matches and consumes any alphanumeric char, including '_'"""
-        ...
 
-    @_represented_by("W", escaped=True)
+    @_RepresentedBy("W", escaped=True)
     @-consume_alphanum
     def consume_not_alphanum(self):
         """Matches and consumes any non-alphanumeric char"""
-        ...
 
-    @_represented_by("s", escaped=True)
+    @_RepresentedBy("s", escaped=True)
     @ConsumeAny(" \r\n\t\v\f")
     def consume_whitespace(self):
         """Matches and consumes any whitespace char"""
-        ...
 
-    @_represented_by("S", escaped=True)
+    @_RepresentedBy("S", escaped=True)
     @-consume_whitespace
     def consume_not_whitespace(self):
         """Matches and consumes any non-whitespace char"""
-        ...
 
     @ConsumeAny("\r\n")
     def consume_newline(self):
         """Matches and consumes any newline char"""
-        ...
 
-    @_represented_by(".")
+    @_RepresentedBy(".")
     @-consume_newline
     def consume_not_newline(self):
         """Matches and consumes any char, excluding newlines"""
-        ...
 
-    @_represented_by("Z", escaped=True)
+    @_RepresentedBy("Z", escaped=True)
     @GenericParserPredicate.of(symbol="\\Z",
                                coverage=SignedSet()) # type: ignore
     def end(self) -> bool:
         """Matches the end of the buffer"""
         return self._cursor >= len(self._string)
 
-    @_represented_by("A", escaped=True)
+    @_RepresentedBy("A", escaped=True)
     @GenericParserPredicate.of(
         symbol="\\A", coverage=SignedSet(negate=True)) # type: ignore
     def begin(self):

@@ -1,3 +1,5 @@
+"""Utilities for performing tests on Regex"""
+
 __author__ = "Callum Hynes"
 __all__ = ["RegexState", "NodeMatcher", "TestRegexShape",
            "TestRegexMatches", "TestNoParseError", "TestParseError"]
@@ -5,9 +7,6 @@ __all__ = ["RegexState", "NodeMatcher", "TestRegexShape",
 from enum import IntEnum, auto
 from typing import Callable, Literal, Self, assert_never, override
 
-if __debug__:
-    from src.debug_graph_viewer import (DebugGraphViewer,
-                                        MultiFigureViewer)
 from src import Regex
 from src.regex_factory import PatternParseError
 from src.regexutil import (ConsumeAny, ConsumeString, ParserPredicate,
@@ -16,6 +15,9 @@ from .test import (AssertNoRaises, AssertRaises, ResultType, TestCase,
                    TestType)
 from .test_error import (EdgeNotFoundError, ExtraEdgesError,
                          RegexMatchError, StateIdentityError)
+if __debug__:
+    from src.debug_graph_viewer import (DebugGraphViewer,
+                                        MultiFigureViewer)
 
 
 class RegexState(IntEnum):
@@ -115,6 +117,7 @@ class NodeMatcher:
         Arguments:
             other -- The state to impersonate
         """
+        # pylint: disable=protected-access
         for edge, state in other._children:
             self._children.append((edge, state))
         other._replaced_by = self
@@ -133,6 +136,7 @@ class NodeMatcher:
         Returns:
             The current instance
         """
+        # pylint: disable=protected-access
         if state == RegexState.END and self._handler._end is None:
             self._handler._end = self
             self._type = RegexState.END
@@ -237,26 +241,28 @@ class NodeMatcher:
         # Proxy
         if self._replaced_by is not None:
             return self._replaced_by.has(edge, to)
-        next: NodeMatcher
+        next_state: NodeMatcher
+        # pylint: disable=protected-access
         match to:
             case RegexState.ANY:
-                next = NodeMatcher(self._handler)
+                next_state = NodeMatcher(self._handler)
             case RegexState.START:
-                next = self._handler._start
+                next_state = self._handler._start
             case RegexState.END:
                 if self._handler._end is None:
                     self._handler._end = NodeMatcher(self._handler,
                                                      RegexState.END)
-                next = self._handler._end
+                next_state = self._handler._end
             case RegexState.SELF:
-                next = self
+                next_state = self
             case NodeMatcher() as x:
-                next = x
+                next_state = x
             case _:
                 assert_never(to)
-        self._children.append((edge, next))
-        return next
+        self._children.append((edge, next_state))
+        return next_state
 
+    # pylint: disable=dangerous-default-value
     @staticmethod
     def _num_ending(num: int, *,
                     _ENDINGS=['th', 'st', 'nd', 'rd']) -> str:
@@ -269,10 +275,9 @@ class NodeMatcher:
         Returns:
             The string decoration to be appended to the number
         """
-        if (num >= 10 and num < 20) or num % 10 > 3:
+        if 10 <= num < 20 or num % 10 > 3:
             return 'th'
-        else:
-            return _ENDINGS[num % 10]
+        return _ENDINGS[num % 10]
 
     @staticmethod
     def _num_w_ending(num: int) -> str:
@@ -302,8 +307,9 @@ class NodeMatcher:
         Returns:
             A string description of this node in the graph.
         """
-        # Proxy
+        # pylint: disable=protected-access
         if self._replaced_by is not None:
+            # Proxy other
             return self._replaced_by._msg(_visited, _top)
         joiner = ""
         if not _top:
@@ -332,9 +338,9 @@ class NodeMatcher:
             return (f"{joiner.replace('to', 'back to')}the "
                     f"{relative_pos} state.")
         _visited.append(self)
-        if len(self._children) == 0:
+        if not self._children:
             return f"{joiner}{self._state_name()}."
-        elif len(self._children) == 1:
+        if len(self._children) == 1:
             result = ""
             if _top:
                 result = self._state_name()
@@ -343,15 +349,14 @@ class NodeMatcher:
             result += f", followed by an {self._children[0][0]}-move"
             result += self._children[0][1]._msg(_visited)
             return result
-        else:
-            result = joiner
-            result += f"{self._state_name()}, followed by:<ul>"
-            for move, child in self._children:
-                result += (f"<li>an {move}-move to "
-                           f"{child._msg(_visited, True)}"
-                           f"</li>")
-            result += "</ul>"
-            return result
+        result = joiner
+        result += f"{self._state_name()}, followed by:<ul>"
+        for move, child in self._children:
+            result += (f"<li>an {move}-move to "
+                       f"{child._msg(_visited, True)}"
+                       f"</li>")
+        result += "</ul>"
+        return result
 
     def _evaluate(self, _taken: set[State]) -> None:
         """
@@ -369,8 +374,9 @@ class NodeMatcher:
             ExtraEdgesError: If there are any extra edges leaving this
                 state which are not expected to be present
         """
-        # Proxy
+        # pylint: disable=protected-access
         if self._replaced_by is not None:
+            # Proxy other
             return self._replaced_by._evaluate(_taken)
         assert self._handler._regex is not None
         if self._evaluated:
@@ -493,6 +499,7 @@ class TestRegexShape(TestCase):
         Tries to match the shape described to the actual Regex produced,
         and updates the te4st case fields to  describe the results
         """
+        # pylint: disable=protected-access
         # Initialize _regex here so errors are catched by test
         self._regex = Regex(self._pattern)
         self._debug_regex = self._regex.copy()
@@ -527,6 +534,7 @@ class TestRegexShape(TestCase):
     def _evaluate(self):
         """Evaluate the node matchers on the Regex"""
         assert self._regex is not None
+        # pylint: disable=protected-access
         self._start._for = self._regex.start
         self._start._evaluate(set((self._regex.end,)))
 
@@ -617,9 +625,9 @@ class TestNoParseError(AssertNoRaises):
         self._callable = Regex  # type: ignore
 
     @override
-    def _inner_test(self) -> None:
+    def _inner_test(self, *args, **kwargs) -> None:
         # Pass pattern, will be passed to Regex constructor
-        return super()._inner_test(self._pattern)
+        return super()._inner_test(self._pattern, *args, **kwargs)
 
 
 class TestParseError(AssertRaises):
@@ -643,6 +651,6 @@ class TestParseError(AssertRaises):
         self._callable = Regex  # type: ignore
 
     @override
-    def _inner_test(self) -> None:
+    def _inner_test(self, *args, **kwargs) -> None:
         # Pass pattern, will be passed to Regex constructor
-        return super()._inner_test(self._pattern)
+        return super()._inner_test(self._pattern, *args, **kwargs)

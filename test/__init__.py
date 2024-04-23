@@ -1,12 +1,16 @@
+"""Testing package to test the library's functionality"""
+
 __author__ = "Callum Hynes"
 __all__ = ["run_tests"]
 
+import sys
 from src.regexutil import MatchConditions
 from .regex_tests import (NodeMatcher, RegexState, TestNoParseError,
                           TestParseError, TestRegexMatches,
                           TestRegexShape)
 from .test import ResultType, TestCase, TestType, _copy_html
 
+# pylint: disable=missing-function-docstring
 
 # Digits
 @TestRegexShape(r"\d")
@@ -110,9 +114,9 @@ def test_longer_or(start: NodeMatcher):
 @TestRegexShape(r"hello|hi",
                 expecting="two h-moves to be merged into one")
 def test_powerset_construction(start: NodeMatcher):
-    next = start.has_literal('h')
-    next.has_literal_chain('ello', RegexState.END)
-    next.has_literal('i', RegexState.END)
+    next_state = start.has_literal('h')
+    next_state.has_literal_chain('ello', RegexState.END)
+    next_state.has_literal('i', RegexState.END)
 
 
 @TestRegexShape(r"\da|[13579a-e]b",
@@ -270,7 +274,13 @@ def run_tests():
     if __debug__:
         _copy_html(TestCase.produce_html_printout())
         print("Ran all tests: full results in clipboard")
+        # pylint: disable=protected-access
         TestRegexShape._failed_regex.display()
-    failed = sum([tests[ResultType.FAIL] + tests[ResultType.ERROR]
-                  for tests in results.values()])
-    exit(failed)
+    else:
+        failed = sum(tests[ResultType.FAIL] + tests[ResultType.ERROR]
+                     for tests in results.values())
+        if failed:
+            # Print header
+            print(f"\n{'':=>20}\n|{'Full Output':^18}|\n{'':=>20}\n")
+            print(TestCase.produce_html_printout())
+        sys.exit(failed)
