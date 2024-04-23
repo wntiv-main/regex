@@ -19,7 +19,9 @@
 			"request": "launch",
 			"program": "${workspaceFolder}/playground.py",
 			"justMyCode": false,
-			"console": "integratedTerminal"
+			"console": "integratedTerminal",
+			"preLaunchTask": "Import module",
+			"postDebugTask": "Clean up module"
 		}
 	]
 }
