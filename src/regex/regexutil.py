@@ -508,7 +508,9 @@ class ParserPredicate(ABC):
             of the two sets
         """
         diff = first ^ second
-        for el in diff:
+        for el in diff.copy():
+            if el not in diff:
+                continue
             if ((el in first and
                  (other := el.kind_of_in(second)) is not None)
                 or (el in second and

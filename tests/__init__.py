@@ -298,6 +298,36 @@ TestRegexMatches(r"a{3,5}\Z", TestType.BOUNDARY) \
 TestParseError(r'a{5,3}')
 TestNoParseError(r'a{3,5}')
 
+# Complexity tests
+TestRegexMatches(
+    r"\A(?P<user>\w+(?:\.\w+)*)@(?P<domain>\w+(?:\.\w+)+)\Z") \
+    .assert_matches(
+        "hynescj20@cashmere.school.nz",
+        "abc@cashmere.school.nz",
+        "abc12@gmail.com",
+        "my_name@outlook.com",
+        "a@b.c")                                              \
+    .assert_doesnt_match(
+        "not_a@validdomain",
+        ".invalid@gmail.com",
+        "invalid.@gmail.com",
+        "user@.invaliddomain",
+        "user@invaliddomain.",
+        "")
+
+TestRegexMatches(
+    r"\A(?:\+\d{1,2}\s*)?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}\Z") \
+    .assert_matches(
+        "1234567890",
+        "123-456-7890",
+        "(123) 456-7890",
+        "123 456 7890",
+        "123.456.7890",
+        "+91 (123) 456-7890",
+        "+64 022 345 6789",
+        "+123456789999")                                       \
+    .assert_doesnt_match("41568739037463", "+()--", "")
+
 
 def run_tests():
     """Run all tests and output to user"""

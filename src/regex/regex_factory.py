@@ -409,7 +409,7 @@ class _RegexFactory:
                 # if ch == 'A':
                 #     self._anchored = True
                 self.append(_parser_symbols_escaped[ch].copy())
-            case (ch, _) if ch in "\\.^$+*?[]{}()":
+            case ch if ch in "\\.^$+*?[]{}()":
                 self.append(ConsumeString(ch))
             case _:
                 raise PatternParseError(
@@ -538,7 +538,8 @@ class _RegexFactory:
                 if self._try_consume("?:"):
                     # Non-capturing group
                     pass
-                elif self._try_consume("?<") or self._try_consume("?P<"):
+                elif (self._try_consume("?<")
+                      or self._try_consume("?P<")):
                     # Named capture group
                     capture_group = self._consume_till_next('>')
                 else:
@@ -563,8 +564,9 @@ class _RegexFactory:
                 self.append(inner_group)
                 if nested == _NestedType.NESTED_GROUP:
                     # Ensure that we still also have closing bracket
-                    _ = self._find_next(')', self._is_unescaped,
-                                        _started_at=self._cursor_started)
+                    _ = self._find_next(
+                        ')', self._is_unescaped,
+                        _started_at=self._cursor_started)
             case ')':
                 if nested == _NestedType.TOP:
                     raise PatternParseError(
