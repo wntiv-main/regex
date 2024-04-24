@@ -265,8 +265,8 @@ class NodeMatcher:
         self._children.append((edge, next_state))
         return next_state
 
-    # pylint: disable=dangerous-default-value
     @staticmethod
+    # pylint: disable-next=dangerous-default-value
     def _num_ending(num: int, *,
                     _ENDINGS=['th', 'st', 'nd', 'rd']) -> str:
         """
@@ -439,6 +439,7 @@ class NodeMatcher:
             raise ExtraEdgesError(self, extras)
 
 
+# pylint: disable-next=too-many-instance-attributes
 class TestRegexShape(TestCase):
     """
     A test case requiring the regex generated from a given pattern to
@@ -478,7 +479,7 @@ class TestRegexShape(TestCase):
         description = (f"Trying to construct regular expression from "
                        f"`{pattern}`")
         if reverse:
-            description += f", and reverse it"
+            description += ", and reverse it"
         super().__init__(test_type, description)
         self._start = NodeMatcher(self, RegexState.START)
         # Not initialized yet as maybe == _start?

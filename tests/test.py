@@ -57,9 +57,10 @@ def _copy_html(  # pylint: disable=dangerous-default-value
     Arguments:
         content -- The HTML content to copy.
     """
-    # Adapted from https://stackoverflow.com/questions/55698762/how-to-copy-html-code-to-clipboard-using-python # pylint: disable=line-too-long
+    # Adapted from:
+    # https://stackoverflow.com/questions/55698762/how-to-copy-html-code-to-clipboard-using-python
     try:
-        # pylint: disable=import-outside-toplevel
+        # pylint: disable-next=import-outside-toplevel
         import win32clipboard
     except ImportError:
         print("WARNING: `pip install pywin32` is needed to copy "

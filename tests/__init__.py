@@ -307,7 +307,7 @@ def run_tests():
     if __debug__:
         _copy_html(TestCase.produce_html_printout())
         print("Ran all tests: full results in clipboard")
-        # pylint: disable=protected-access
+        # pylint: disable-next=protected-access
         TestRegexShape._failed_regex.display()
     else:
         failed = sum(tests[ResultType.FAIL] + tests[ResultType.ERROR]

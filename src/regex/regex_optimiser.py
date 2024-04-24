@@ -147,7 +147,7 @@ class _OptimiseRegex(_MovingIndexHandler):
     Optimises a Regex to use minimal states without any epsilon moves or
     non-deterministic junctions
     """
-    # Required a lot of access to Regex objects
+    # Requires a lot of access to Regex objects
     # pylint: disable=protected-access
 
     regex: 'rx.Regex'

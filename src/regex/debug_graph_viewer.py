@@ -270,7 +270,7 @@ class MultiFigureViewer:
                     # Unix only??
                     fig.canvas.manager \
                         .window.state('zoomed') # type: ignore
-                # pylint: disable=broad-exception-caught
+                # pylint: disable-next=broad-exception-caught
                 except Exception:
                     fig.canvas.manager.resize( # type: ignore
                         *fig.canvas.manager
@@ -340,7 +340,7 @@ def test_layouts_for(graph: np.ndarray,
         viewer = DebugGraphViewer(graph, start_idx, end_idx, layout)
         try:
             fig = viewer.render()
-        # pylint: disable=broad-exception-caught
+        # pylint: disable-next=broad-exception-caught
         except Exception:  # If layout errs, just skip
             continue
         fig.canvas.manager.set_window_title(name) # type: ignore

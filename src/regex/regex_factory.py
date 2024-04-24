@@ -179,7 +179,7 @@ class _RegexFactory:
     # Dangerous default value intentionally used to avoid
     # re-initialization of a constant value ("static" initialization),
     # for performance
-    # pylint: disable=dangerous-default-value
+    # pylint: disable-next=dangerous-default-value
     def _find_next(
             self,
             ch: str,
@@ -533,7 +533,7 @@ class _RegexFactory:
                 start_pos = self._cur - 1
                 # Capture groups, currently ignored
                 # Will use later maybe!
-                # pylint: disable=unused-variable
+                # pylint: disable-next=unused-variable
                 capture_group: CaptureGroup | None = None
                 if self._try_consume("?:"):
                     # Non-capturing group

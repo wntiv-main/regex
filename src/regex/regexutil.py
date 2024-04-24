@@ -40,6 +40,8 @@ class SignedSet(Generic[T]):
     charset, one would only need to represent the chars either included
     or excluded from the set
     """
+    # Lots of internal access to other SignedSet instances
+    # pylint: disable=protected-access
 
     _negate: bool
     """Whether the is negated"""
@@ -122,7 +124,7 @@ class SignedSet(Generic[T]):
     def union(self, *others: 'SignedSet[T]') -> 'SignedSet[T]':
         ...
 
-    # pylint: disable=no-self-argument
+    # pylint: disable-next=no-self-argument
     def union(*sets):  # type: ignore
         """
         Finds the union of the given sets, the set containing all of the
@@ -144,7 +146,6 @@ class SignedSet(Generic[T]):
             The current instance
         """
         for el in sets:
-            # pylint: disable=protected-access
             match self._negate, el._negate:
                 case False, False:
                     self._accept |= el._accept
@@ -168,7 +169,7 @@ class SignedSet(Generic[T]):
     def intersection(self, *others: 'SignedSet[T]') -> 'SignedSet[T]':
         ...
 
-    # pylint: disable=no-self-argument
+    # pylint: disable-next=no-self-argument
     def intersection(*sets):  # type: ignore
         """
         Finds the intersection of the given sets, the set of all
@@ -190,7 +191,6 @@ class SignedSet(Generic[T]):
             The current instance
         """
         for el in sets:
-            # pylint: disable=protected-access
             match self._negate, el._negate:
                 case False, False:
                     self._accept &= el._accept
@@ -213,7 +213,6 @@ class SignedSet(Generic[T]):
         Returns:
             A new SignedSet, the symmetric difference of the two sets
         """
-        # pylint: disable=protected-access
         match self._negate, other._negate:
             case (False, False) | (True, True):
                 return SignedSet(self._accept ^ other._accept)
@@ -234,7 +233,6 @@ class SignedSet(Generic[T]):
         Returns:
             The current instance
         """
-        # pylint: disable=protected-access
         match self._negate, other._negate:
             case False, False:
                 self._accept ^= other._accept
@@ -255,7 +253,6 @@ class SignedSet(Generic[T]):
         Returns:
             A new SignedSet, the difference of the two sets
         """
-        # pylint: disable=protected-access
         match self._negate, other._negate:
             case False, False:
                 return SignedSet(self._accept - other._accept)
@@ -277,7 +274,6 @@ class SignedSet(Generic[T]):
         Returns:
             The current instance
         """
-        # pylint: disable=protected-access
         match self._negate, other._negate:
             case False, False:
                 self._accept -= other._accept
@@ -859,8 +855,8 @@ class MatchConditions:
         """Always matches, and consumes a char"""
 
 # region regex tokens
-    # Pylint fails to recognise __neg__ defined on ConsumeAny instances
-    # pylint: disable=invalid-unary-operand-type
+# Pylint fails to recognise __neg__ defined on ConsumeAny instances
+# pylint: disable=invalid-unary-operand-type
     @_RepresentedBy(symbol="d", escaped=True)
     @ConsumeAny(_digits)
     def consume_digit(self):

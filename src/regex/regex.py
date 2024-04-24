@@ -44,7 +44,7 @@ class Regex:
         if __debug__:
             Regex._debug_function(self, msg)
 
-    # pylint: disable=no-member
+    # pylint: disable-next=no-member, unsubscriptable-object
     edge_map: np.ndarray[Any, np.dtypes.ObjectDType]
     """
     A 2D array (or matrix) of sets of transitions, so that from a given
