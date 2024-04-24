@@ -1,4 +1,4 @@
-"""Example showing usecase of validating phone numbers"""
+"""Example showing possible usecase: validating phone numbers"""
 
 from regex import Regex
 
