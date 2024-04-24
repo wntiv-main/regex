@@ -1,5 +1,4 @@
 {
-	"module.version": "0.0.1",
 	"python.analysis.typeCheckingMode": "basic",
 	"python.analysis.autoImportCompletions": true,
 	"pylint.args": ["--rcfile=${workspaceFolder}/.pylintrc"],
@@ -13,5 +12,5 @@
 		"undefined-variable": "Warning"
 	},
 	"pylint.importStrategy": "fromEnvironment",
-	"pylint.lintOnChange": true
+	"python.analysis.extraPaths": ["./src"]
 }

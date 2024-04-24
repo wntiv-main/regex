@@ -2,6 +2,6 @@
 
 __author__ = "Callum Hynes"
 
-from tests import run_tests
+from . import run_tests
 
 run_tests()

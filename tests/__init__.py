@@ -4,7 +4,7 @@ __author__ = "Callum Hynes"
 __all__ = ["run_tests"]
 
 import sys
-from regex.regexutil import MatchConditions
+from regex.regexutil import MatchConditions  # type: ignore
 from .regex_tests import (NodeMatcher, RegexState,
                           TestNoParseError, TestParseError,
                           TestRegexMatches, TestRegexShape)

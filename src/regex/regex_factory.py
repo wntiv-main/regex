@@ -6,7 +6,7 @@ __all__ = ['PatternParseError', '_RegexFactory']
 from enum import IntEnum, auto
 from typing import Callable
 
-import regex as rx  # type annotating
+from .regex import Regex
 from .regex_optimiser import _OptimiseRegex
 from .regexutil import (CaptureGroup, ConsumeAny, ConsumeString,
                         MatchConditions, ParserPredicate, SignedSet,
@@ -90,7 +90,7 @@ class _NestedType(IntEnum):
 class _RegexFactory:
     """Factory class to parse and construct a Regex"""
 
-    regex: 'rx.Regex'
+    regex: Regex
     """The Regex being currently built"""
 
     pattern: str
@@ -99,7 +99,7 @@ class _RegexFactory:
     _cur: int
     """The current parse index into {_pattern}"""
 
-    _last_token: 'rx.Regex | None'
+    _last_token: Regex | None
     """The last parsed token, stored seperately for `?`, `+`, etc."""
 
     _capture_auto_id: int
@@ -127,7 +127,7 @@ class _RegexFactory:
             _open_bracket_pos -- Position of the opening bracket, if
                 any, used for detailed error printouts. (default: {0})
         """
-        regex = rx.Regex(_privated=None)
+        regex = Regex(_privated=None)
         self.regex = regex
         self.pattern = pattern
         self._cur = _cursor
@@ -137,7 +137,7 @@ class _RegexFactory:
         self._capture_auto_id = _cid
         self._cursor_started = _open_bracket_pos
 
-    def append(self, connection: 'ParserPredicate | rx.Regex') -> None:
+    def append(self, connection: ParserPredicate | Regex) -> None:
         """
         Append to the regex, correctly handling tokens for {_last_token}
 
@@ -145,7 +145,7 @@ class _RegexFactory:
             connection -- The connection or regular expression to append
         """
         if isinstance(connection, ParserPredicate):
-            connection = rx.Regex(connection, _privated=None)
+            connection = Regex(connection, _privated=None)
         self.connect_last()
         self._last_token = connection
 
@@ -370,8 +370,7 @@ class _RegexFactory:
                 f"'{self.pattern[self._cur - 1]}' must be preceded by"
                 f" another token", self.pattern, self._cur - 1)
 
-    def build(self, *, _nested: _NestedType = _NestedType.TOP) \
-            -> 'rx.Regex':
+    def build(self, *, _nested: _NestedType = _NestedType.TOP) -> Regex:
         """
         Parse the pattern and return the resultant Regex
 

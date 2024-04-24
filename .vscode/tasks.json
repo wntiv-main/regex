@@ -2,38 +2,51 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"label": "Clean up module",
-			"hide": true,
-			"command": "${command:python.interpreterPath}",
-			"type": "shell",
-			"args": [
-				"-m",
-				"pip",
-				"uninstall",
-				"${workspaceFolderBasename}",
-				"-y"
-			]
-		},
-		{
-			"label": "Setup module",
-			"hide": true,
-			"command": "${command:python.interpreterPath}",
-			"type": "shell",
-			"args": ["${workspaceFolder}/setup.py", "sdist"],
-			"dependsOn": []
-		},
-		{
-			"label": "Import module",
-			"hide": true,
+			"label": "Develop: Install module",
 			"command": "${command:python.interpreterPath}",
 			"type": "shell",
 			"args": [
 				"-m",
 				"pip",
 				"install",
-				"${workspaceFolder}/dist/${workspaceFolderBasename}-${config:module.version}.tar.gz"
+				"--editable",
+				"${workspaceFolder}"
 			],
-			"dependsOn": ["Setup module"]
+			"problemMatcher": []
+		},
+		{
+			"label": "Deploy: Build module",
+			"command": "${command:python.interpreterPath}",
+			"type": "shell",
+			"args": ["-m", "build"],
+			"problemMatcher": []
+		},
+		{
+			"label": "Deploy: Install module",
+			"command": "${command:python.interpreterPath}",
+			"type": "shell",
+			"args": [
+				"-m",
+				"pip",
+				"install",
+				"\"${workspaceFolder}/dist/$((ls dist/*.whl)[0].Name)\""
+			],
+			"problemMatcher": [],
+			"dependsOn": ["Uninstall module", "Deploy: Build module"]
+		},
+		{
+			"label": "Uninstall module",
+			"command": "${command:python.interpreterPath}",
+			"type": "shell",
+			"args": ["-m", "pip", "uninstall", "regex", "-y"],
+			"problemMatcher": []
+		},
+		{
+			"label": "Develop: Reinstall module",
+			"hide": true,
+			"dependsOn": ["Uninstall module", "Develop: Install module"],
+			"dependsOrder": "sequence",
+			"problemMatcher": []
 		}
 	]
 }

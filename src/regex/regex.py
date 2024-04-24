@@ -1,14 +1,7 @@
-r"""
-Regular expression library using deterministic finite automaton (DFA)
-to build and evaluate regular expressions efficiently
-
-Usage:
-    rx = Regex(r"\(\d+(?:,\s*\d+))\)") # match integer tuple e.g. (1, 2)
-    rx.test("(1, 3, 37,14)") # True
-"""
+"""Main Regex class for representing regular expressions"""
 
 __author__ = "Callum Hynes"
-__all__ = ["Regex", "State", "debug_graph_viewer"]
+__all__ = ["Regex"]
 
 from typing import (Any, Callable, Iterable, Mapping, Self, Sequence,
                     overload)
@@ -18,9 +11,7 @@ except ImportError as e:
     e.add_note("Regex library requires numpy: `pip install numpy`")
     raise e  # raise to user
 
-from . import debug_graph_viewer
 from .regexutil import MatchConditions, ParserPredicate, State
-from .regex_factory import _RegexFactory
 
 
 class Regex:
@@ -114,6 +105,9 @@ class Regex:
         # Use match statement to determine which overload
         match args, kwargs:
             case (str(regex),), {}:
+                # Import here to resolve cyclic import
+                # pylint: disable-next=import-outside-toplevel
+                from .regex_factory import _RegexFactory
                 return _RegexFactory(regex).build()  # type: ignore
             case (ParserPredicate() as x,), {"_privated": _}:
                 result = super().__new__(cls)
