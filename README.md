@@ -9,18 +9,19 @@ Requires Python 12
 Module is required to be built and installed to run examples, after which these examples can simply be run
 Either of the below methods will work to get the examples running
 
-### Running module distribution
-Requires `pip install build`
+### Running module in development
+Faster, links the module source directly, also meaning that module doesnt have to be re-built and installed
+whenever modifications are made to the module. Useful for development
+Task: `Develop: Install module` to install module into python env
+Task: `Develop: Uninstall module` to uninstall and cleanup
+
+### Building module deployment distribution
+Requires `pip install build`, slower
 Task: `Deploy: Install module` to install module into python env
 Task: `Uninstall module` to uninstall and cleanup
 This distribution (output in dist/) *could* then be uploaded to a package index, e.g. PyPI
 I have chosen *not* to do this (yet?) as this is a school project and not stable enough to
 be used in production.
-
-### Running without distribution
-Faster, installs the module source directly
-Task: `Develop: Install module` to install module into python env
-Task: `Develop: Uninstall module` to uninstall and cleanup
 
 ## Running tests
 `launch.json` provides two run configurations to output the tests
