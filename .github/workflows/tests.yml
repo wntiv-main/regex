@@ -24,7 +24,7 @@ jobs:
         python -m build
     - name: Install module
       run: |
-        pip install dist/$(ls dist/*.whl)
+        pip install $(ls dist/*.whl)
     - name: Running tests
       run: |
         python -O -m tests
