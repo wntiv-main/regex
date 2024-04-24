@@ -9,6 +9,7 @@
 			"type": "debugpy",
 			"request": "launch",
 			"module": "tests",
+			"args": ["--full-output"],
 			"console": "integratedTerminal"
 		},
 		{
@@ -16,6 +17,7 @@
 			"type": "debugpy",
 			"request": "launch",
 			"module": "tests",
+			"args": ["--full-output"],
 			"console": "integratedTerminal",
 			"preLaunchTask": "Deploy: Install module",
 			"postDebugTask": "Develop: Reinstall module"

@@ -50,12 +50,15 @@ def _copy_html(  # pylint: disable=dangerous-default-value
     "StartSelection:%09d\r\n"
     "EndSelection:%09d\r\n"
     "SourceURL:%s\r\n",
-        _CF_HTML=[]):
+        _CF_HTML=[]) -> bool:
     """
     Cursed function to copy HTML content to the user's clipboard
 
     Arguments:
         content -- The HTML content to copy.
+
+    Returns:
+        Whether the contents were successfully copied
     """
     # Adapted from:
     # https://stackoverflow.com/questions/55698762/how-to-copy-html-code-to-clipboard-using-python
@@ -65,7 +68,7 @@ def _copy_html(  # pylint: disable=dangerous-default-value
     except ImportError:
         print("WARNING: `pip install pywin32` is needed to copy "
               "HTML output.")
-        return
+        return False
     # pylint: disable=c-extension-no-member
     if not _CF_HTML:
         _CF_HTML.append(win32clipboard
@@ -86,6 +89,7 @@ def _copy_html(  # pylint: disable=dangerous-default-value
         src = (prefix + html).encode("UTF-8")
         # print(src)
         win32clipboard.SetClipboardData(_CF_HTML[0], src)
+        return True
     finally:
         win32clipboard.CloseClipboard()
 

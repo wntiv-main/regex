@@ -325,25 +325,27 @@ TestRegexMatches(
         "123.456.7890",
         "+91 (123) 456-7890",
         "+64 022 345 6789",
-        "+123456789999")                                       \
+        "+123456789999")                                           \
     .assert_doesnt_match("41568739037463", "+()--", "")
 
 
 def run_tests():
     """Run all tests and output to user"""
-    print("TEST SUMMARY:")
+    print("Running tests...")
     results = TestCase.run_cases()
+    print("TEST SUMMARY:")
     print(TestCase.format_results_table(results))
-    if __debug__:
-        _copy_html(TestCase.produce_html_printout())
-        print("Ran all tests: full results in clipboard")
+    if "--full-output" in sys.argv:
+        output = TestCase.produce_html_printout()
+        if _copy_html(output):
+            print("Full results in clipboard")
+        else:
+            # Print header
+            print(f"\n{'='*20}\n|{'Full Output':^18}|\n{'='*20}\n")
+            print(output)
+    failed = sum(tests[ResultType.FAIL] + tests[ResultType.ERROR]
+                 for tests in results.values())
+    if failed and __debug__:
         # pylint: disable-next=protected-access
         TestRegexShape._failed_regex.display()
-    else:
-        failed = sum(tests[ResultType.FAIL] + tests[ResultType.ERROR]
-                     for tests in results.values())
-        if failed:
-            # Print header
-            print(f"\n{'':=>20}\n|{'Full Output':^18}|\n{'':=>20}\n")
-            print(TestCase.produce_html_printout())
-        sys.exit(failed)
+    sys.exit(failed)
