@@ -4,6 +4,7 @@ setup.py
 src/regex/__init__.py
 src/regex/debug_graph_viewer.py
 src/regex/networkx_curved_label.py
+src/regex/regex.py
 src/regex/regex_factory.py
 src/regex/regex_optimiser.py
 src/regex/regexutil.py

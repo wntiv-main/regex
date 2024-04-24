@@ -8,14 +8,14 @@
 			"name": "Python: Run Tests",
 			"type": "debugpy",
 			"request": "launch",
-			"program": "${workspaceFolder}/test.py",
+			"module": "tests",
 			"console": "integratedTerminal"
 		},
 		{
 			"name": "Python: Run Tests (Distribution)",
 			"type": "debugpy",
 			"request": "launch",
-			"program": "${workspaceFolder}/test.py",
+			"module": "tests",
 			"console": "integratedTerminal",
 			"preLaunchTask": "Deploy: Install module",
 			"postDebugTask": "Develop: Reinstall module"
