@@ -237,6 +237,8 @@ class _OptimiseRegex(_MovingIndexHandler):
             i = self.todo.pop()
             if i.removed():
                 continue
+            if not __debug__ and i.value() > self.size():
+                continue
             # Remove redundant states
             if self.regex._remove_if_unreachable(i.value()):
                 self.remove(i)
