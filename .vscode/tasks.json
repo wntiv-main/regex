@@ -19,6 +19,7 @@
 			"command": "${command:python.interpreterPath}",
 			"type": "shell",
 			"args": ["-m", "build"],
+			"dependsOn": ["Clean build output"],
 			"problemMatcher": []
 		},
 		{
@@ -46,6 +47,27 @@
 			"hide": true,
 			"dependsOn": ["Uninstall module", "Develop: Install module"],
 			"dependsOrder": "sequence",
+			"problemMatcher": []
+		},
+		{
+			"label": "Clean build output",
+			"dependsOn": ["Clean build dir", "Clean dist dir"],
+			"problemMatcher": []
+		},
+		{
+			"label": "Clean build dir",
+			"hide": true,
+			"command": "rm",
+			"type": "shell",
+			"args": ["-r", "-force", "${workspaceFolder}/build/*"],
+			"problemMatcher": []
+		},
+		{
+			"label": "Clean dist dir",
+			"hide": true,
+			"command": "rm",
+			"type": "shell",
+			"args": ["-r", "-force", "${workspaceFolder}/dist/*"],
 			"problemMatcher": []
 		}
 	]
