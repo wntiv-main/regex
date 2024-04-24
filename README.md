@@ -4,10 +4,25 @@ to build and evaluate regular expressions efficiently.
 
 ## Environment
 Requires Python 12
+Requires `pip install numpy`
 
-## Running examples
+## Building manually
+In project root directory:
+```cmd
+python -m pip install build
+python -m build
+pip install ./dist/<name_of_build_wheel>.whl[<comma-seperated extras>]
+```
+Available extras: debuggraphviewer, copy-html
+last line examples:
+- `pip install ./dist/<name_of_build_wheel>.whl`
+- `pip install ./dist/<name_of_build_wheel>.whl[debuggraphviewer]`
+- `pip install ./dist/<name_of_build_wheel>.whl[debuggraphviewer, copy-html]`
+
+## Running examples from VSCode
 Module is required to be built and installed to run examples, after which these examples can simply be run
-Either of the below methods will work to get the examples running
+Build tasks are provided to do the above building for you. Note that these tasks do NOT install any extras,
+if you need those either install the requirements manually, or follow the manual build instructions
 
 ### Running module in development
 Faster, links the module source directly, also meaning that module doesnt have to be re-built and installed
