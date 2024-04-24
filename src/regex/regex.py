@@ -503,15 +503,19 @@ class Regex:
         result |= other
         return result
 
-    def __neg__(self) -> 'Regex':
+    def reverse(self) -> 'Regex':
         """
         Reverses the regex, so that it matches the reversed strings.
 
         Returns:
             A new Regex which matches the reverse strings.
         """
-        # TODO:
-        raise NotImplementedError()
+        result = self.copy()
+        result.edge_map = result.edge_map.transpose()
+        result.start = self.end
+        result.end = self.start
+        return result
+    __neg__ = reverse
 
     def __bool__(self) -> bool:
         """
@@ -560,7 +564,7 @@ class Regex:
                      MatchConditions.epsilon_transition)
         return self
 
-    def repeated(self) -> Self:
+    def repeat(self) -> Self:
         """
         Makes the current Regex repeated, so that it will match any
         number of sequential matching strings.

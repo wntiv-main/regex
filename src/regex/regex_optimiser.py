@@ -243,7 +243,6 @@ class _OptimiseRegex(_MovingIndexHandler):
                 continue
             # Iterate states inner loop
             for j in self.iterate():
-                # TODO: soon edges will have more info
                 self.epsilon_closure(i, j)
                 if j.removed():
                     continue
@@ -414,7 +413,6 @@ class _OptimiseRegex(_MovingIndexHandler):
         # Add new state for the intersection
         new_state = self.index(self.regex.add_state())
         self.todo.add(self.index(new_state))
-        # TODO: assuming that intersect should be ConsumeAny
         intersect: ParserPredicate
         if intersection.length() == 1:
             intersect = ConsumeString(intersection.unwrap_value())

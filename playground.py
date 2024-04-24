@@ -28,7 +28,7 @@ def main():
         print(f"dupls: {rx._find_double_refs()}")
     Regex._debug_function = debug
     try:
-        rx = Regex(r"a{,3}")
+        rx = Regex(r"a*b*c*")
         print(rx)
         mfv.add(DebugGraphViewer(rx.edge_map,
                                  rx.start, rx.end).render())

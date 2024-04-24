@@ -442,22 +442,15 @@ class _RegexFactory:
             case '?':  # Make _last_token optional
                 self._require_previous()
                 assert self._last_token is not None
-                self._last_token = self._last_token.optional()
+                self._last_token.optional()
             case '+':  # Repeat 1+ times quantifier
                 self._require_previous()
                 assert self._last_token is not None
-                self._last_token = self._last_token.repeated()
-                # sandbox to prevend out-of-order-ing sequenced loops
-                # TODO: is this neccesary??
-                # i think it is now
-                # here again, thinking it still is
-                self.append(MatchConditions.epsilon_transition)
+                self._last_token.repeat()
             case '*':  # Repeat 0+ times quantifier
                 self._require_previous()
                 assert self._last_token is not None
-                self._last_token = self._last_token.optional().repeated()
-                # see above
-                self.append(MatchConditions.epsilon_transition)
+                self._last_token.optional().repeat()
             case '[':  # Character class specifiers
                 negated = self._try_consume('^')
                 start_cur = self._cur
@@ -531,14 +524,14 @@ class _RegexFactory:
                     case (int(n), None):
                         self._last_token = (
                             self._last_token * n
-                            + self._last_token.optional().repeated())
+                            + self._last_token.optional().repeat())
                     case _:
                         raise PatternParseError(
                             "Invalid n-quantifier syntax",
                             self.pattern, start_cur)
             case '(':  # group
                 start_pos = self._cur - 1
-                # TODO: Capture group time!
+                # Capture groups, currently ignored
                 # Will use later maybe!
                 # pylint: disable=unused-variable
                 capture_group: CaptureGroup | None = None
@@ -565,7 +558,6 @@ class _RegexFactory:
                 # pylint: disable=protected-access
                 self._cur = inner_builder._cur
                 self._capture_auto_id = inner_builder._capture_auto_id
-                # TODO: capture groups
                 # epsilon moves sandbox group and prevent loops escaping
                 inner_group += MatchConditions.epsilon_transition
                 self.append(inner_group)
@@ -588,7 +580,6 @@ class _RegexFactory:
                     self.pattern, self._cur - 1)
             case '|':  # or
                 start_cur = self._cur - 1
-                # TODO: is this safe?
                 # Parse RHS of expression
                 rh_builder = _RegexFactory(
                     self.pattern,

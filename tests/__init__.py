@@ -13,8 +13,6 @@ from .test import ResultType, TestCase, TestType, _copy_html
 # pylint: disable=missing-function-docstring
 
 # Digits
-
-
 @TestRegexShape(r"\d")
 def test_digits(start: NodeMatcher):
     start.has_any('0123456789', RegexState.END)
@@ -37,6 +35,26 @@ def test_alphanum(start: NodeMatcher):
 TestRegexMatches(r"\w")                                \
     .assert_matches('0', '7', '_', 'a', 'E', 'j', 'X') \
     .assert_doesnt_match('$', '+', '&', '?', '-')
+
+
+# Strings
+@TestRegexShape(r"hello")
+def test_string(start: NodeMatcher):
+    start.has_literal_chain('hello', RegexState.END)
+
+
+@TestRegexShape(r"hello", reverse=True)
+def test_string_reverse(start: NodeMatcher):
+    start.has_literal_chain('olleh', RegexState.END)
+
+
+TestRegexMatches(r"hello")                 \
+    .assert_matches('hello', 'helloijwlk') \
+    .assert_doesnt_match('he', 'dsnjkdf')
+
+TestRegexMatches(r"hello", reverse=True)    \
+    .assert_matches('olleh', 'ollehjkdsfk') \
+    .assert_doesnt_match('hello', '', 'oll', 'dsnjkdf')
 
 
 # Star
@@ -115,6 +133,12 @@ def test_longer_or(start: NodeMatcher):
     start.has_literal_chain('goodbye', RegexState.END)
 
 
+@TestRegexShape(r"hello|goodbye", reverse=True)
+def test_reverse_or(start: NodeMatcher):
+    start.has_literal_chain('olleh', RegexState.END)
+    start.has_literal_chain('eybdoog', RegexState.END)
+
+
 @TestRegexShape(r"hello|hi",
                 expecting="two h-moves to be merged into one")
 def test_powerset_construction(start: NodeMatcher):
@@ -139,6 +163,11 @@ def test_complex_powerset_construction(start: NodeMatcher):
 TestRegexMatches(r"hello\Z|goodbye\Z")  \
     .assert_matches('hello', 'goodbye') \
     .assert_doesnt_match('helloodbye', 'he', 'hellodbye')
+
+
+TestRegexMatches(r"hello|goodbye", reverse=True) \
+    .assert_matches('olleh', 'eybdoog')          \
+    .assert_doesnt_match('hello', 'goodbye', 'eybdo', '', 'og')
 
 TestParseError(r'|abc')
 TestParseError(r'abc|')

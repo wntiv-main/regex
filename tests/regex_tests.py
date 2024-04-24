@@ -453,6 +453,9 @@ class TestRegexShape(TestCase):
     _pattern: str
     """The Regex pattern to use"""
 
+    _reverse: bool
+    """Whether to test the reversed regex instead"""
+
     _regex: Regex | None
     """The Regex object to be matched against"""
 
@@ -470,14 +473,18 @@ class TestRegexShape(TestCase):
 
     def __init__(self, pattern: str,
                  test_type: TestType = TestType.EXPECTED,
-                 expecting: str | None = None):
-        super().__init__(
-            test_type,
-            f"Trying to construct regular expression from `{pattern}`")
+                 expecting: str | None = None,
+                 reverse: bool = False):
+        description = (f"Trying to construct regular expression from "
+                       f"`{pattern}`")
+        if reverse:
+            description += f", and reverse it"
+        super().__init__(test_type, description)
         self._start = NodeMatcher(self, RegexState.START)
         # Not initialized yet as maybe == _start?
         self._end = None
         self._pattern = pattern
+        self._reverse = reverse
         self._expecting = expecting
 
     # For use as decorator
@@ -499,11 +506,13 @@ class TestRegexShape(TestCase):
     def _inner_test(self) -> None:
         """
         Tries to match the shape described to the actual Regex produced,
-        and updates the te4st case fields to  describe the results
+        and updates the test case fields to describe the results
         """
         # pylint: disable=protected-access
         # Initialize _regex here so errors are catched by test
         self._regex = Regex(self._pattern)
+        if self._reverse:
+            self._regex = self._regex.reverse()
         self._debug_regex = self._regex.copy()
         if self._expecting is not None:
             self.set_expected(
@@ -550,6 +559,9 @@ class TestRegexMatches(TestCase):
     _pattern: str
     """The regular expression to use for matching"""
 
+    _reverse: bool
+    """Whether the reverse regex should be tested instead"""
+
     _regex: Regex | None
     """The Regex compiled from the regular expression pattern"""
 
@@ -560,9 +572,11 @@ class TestRegexMatches(TestCase):
     """The set of strings expected to NOT match"""
 
     def __init__(self, pattern: str,
-                 test_type: TestType = TestType.EXPECTED):
+                 test_type: TestType = TestType.EXPECTED,
+                 reverse: bool = False):
         super().__init__(test_type, f"Testing matches for `{pattern}`")
         self._pattern = pattern
+        self._reverse = reverse
         # Defer initialization for error capture
         self._regex = None
         self._expected_matches = set()
@@ -575,6 +589,8 @@ class TestRegexMatches(TestCase):
                           f"match, and {self._unexpected_matches} to "
                           f"all not match.")
         self._regex = Regex(self._pattern)
+        if self._reverse:
+            self._regex = self._regex.reverse()
         for test in self._expected_matches:
             if not self._regex.is_in(test):
                 raise RegexMatchError(self._regex, test, True)
