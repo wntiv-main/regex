@@ -601,10 +601,10 @@ class TestRegexMatches(TestCase):
         if self._unexpected_matches:
             if len(self._unexpected_matches) == 1:
                 expected += (f"{self._unexpected_matches.copy().pop()!r} "
-                             f"to match")
+                             f"to not match")
             else:
                 expected += (f"{self._unexpected_matches} "
-                             f"all to match")
+                             f"all to not match")
         self.set_expected(expected)
         self._regex = Regex(self._pattern)
         if self._reverse:
