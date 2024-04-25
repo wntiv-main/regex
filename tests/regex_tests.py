@@ -297,7 +297,9 @@ class NodeMatcher:
 
     def _msg(self,  # pylint: disable=design
              _visited: list['NodeMatcher'],
-             _top: bool = False) -> str:
+             _indent: int = 0,
+             _top: bool = False,
+             *, _TAB='\t') -> str:
         """
         Cursed recursive logic to produce a human-readable description
         of the "multi-digraph" structure.
@@ -313,7 +315,7 @@ class NodeMatcher:
         # pylint: disable=protected-access
         if self._replaced_by is not None:
             # Proxy other
-            return self._replaced_by._msg(_visited, _top)
+            return self._replaced_by._msg(_visited, _indent, _top)
         joiner = ""
         if not _top:
             joiner = " to "
@@ -348,17 +350,15 @@ class NodeMatcher:
             if _top:
                 result = self._state_name()
             if self._type != RegexState.ANY:
-                result = f" to {self._state_name()}"
+                result = f"{joiner}{self._state_name()}"
             result += f", followed by an {self._children[0][0]}-move"
-            result += self._children[0][1]._msg(_visited)
+            result += self._children[0][1]._msg(_visited, _indent)
             return result
         result = joiner
-        result += f"{self._state_name()}, followed by:<ul>"
+        result += f"{self._state_name()}, followed by:"
         for move, child in self._children:
-            result += (f"<li>an {move}-move to "
-                       f"{child._msg(_visited, True)}"
-                       f"</li>")
-        result += "</ul>"
+            result += (f"\n{_TAB * _indent}- an {move}-move to "
+                       f"{child._msg(_visited, _indent + 1, True)}")
         return result
 
     def _evaluate(self, _taken: set[State]) -> None:
@@ -586,9 +586,24 @@ class TestRegexMatches(TestCase):
     @override
     def _inner_test(self) -> None:
         """Test regex for strings, update test case outcome fields"""
-        self.set_expected(f"Expected {self._expected_matches} to all "
-                          f"match, and {self._unexpected_matches} to "
-                          f"all not match.")
+        expected = "Expected "
+        if self._expected_matches:
+            if len(self._expected_matches) == 1:
+                expected += (f"{self._expected_matches.copy().pop()!r} "
+                             f"to match")
+            else:
+                expected += (f"{self._expected_matches} "
+                             f"all to match")
+            if self._unexpected_matches:
+                expected += ", and "
+        if self._unexpected_matches:
+            if len(self._unexpected_matches) == 1:
+                expected += (f"{self._unexpected_matches.copy().pop()!r} "
+                             f"to match")
+            else:
+                expected += (f"{self._unexpected_matches} "
+                             f"all to match")
+        self.set_expected(expected)
         self._regex = Regex(self._pattern)
         if self._reverse:
             self._regex = self._regex.reverse()

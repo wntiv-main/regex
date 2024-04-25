@@ -4,7 +4,7 @@ to build and evaluate regular expressions efficiently
 
 Usage:
     rx = Regex(r"\(\d+(?:,\s*\d+))\)") # match integer tuple e.g. (1, 2)
-    rx.test("(1, 3, 37,14)") # True
+    rx.test("(1,3, 37,14)") # True
 """
 
 __author__ = "Callum Hynes"

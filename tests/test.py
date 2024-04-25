@@ -31,9 +31,61 @@ class TestType(Enum):
     TOTAL = auto()  # Used only for printing
 
 
-def _htmlify(content: Any) -> str:
+def _replace_markdown_with_tag(
+        source: str,
+        markdown_seq: str, tag_name: str) -> str:
+    """
+    Replaces markdown-style formatting in {source} with the HTML
+    equivilent
+
+    Arguments:
+        source -- The string to search and replace in
+        markdown_seq -- The markdown decorator to search for (e.g. *)
+        tag_name -- The HTML tag to replace it with
+
+    Returns:
+        The refactored string
+    """
+    while (idx := source.find(markdown_seq)) != -1:
+        if (source.find(markdown_seq,
+                        idx + len(markdown_seq) + 1)) != -1:
+            source = (source.replace(markdown_seq, f"<{tag_name}>", 1)
+                      .replace(markdown_seq, f"</{tag_name}>", 1))
+        else:
+            break
+    return source
+
+
+def _htmlify(content: Any, *, _TAB='\t') -> str:
     """Formats the content to be printed as HTML"""
-    return (str(content).replace('\n', '<br/>'))
+    result_lines = str(content).splitlines(keepends=True)
+    current_indent = -1
+    # Handle list structures
+    for i, line in enumerate(result_lines):
+        indent = 0
+        while line.startswith(_TAB):
+            line = line[len(_TAB):]
+            indent += 1
+        if line.startswith("- "):
+            line = f"<li>{line.removeprefix("- ").strip()}</li>"
+            if indent > current_indent:
+                line = f"<ul>{line}"
+        else:
+            indent -= 1
+        if indent < current_indent:
+            line = f"</ul>{line}"
+        current_indent = indent
+        result_lines[i] = line
+    result = ''.join(result_lines)
+    result += "</ul>" * (current_indent + 1)  # close remaining tags
+
+    result = result.replace('\n<ul>', '<ul>')
+    result = _replace_markdown_with_tag(result, "```", "pre")
+    result = result.replace('<pre>\n', '<pre>')
+    result = result.replace('\n</pre>', '</pre>')
+    result = _replace_markdown_with_tag(result, "`", "code")
+    result = result.replace('\n', '<br/>')
+    return result
 
 
 def _copy_html(  # pylint: disable=dangerous-default-value
@@ -192,9 +244,9 @@ class TestCase(ABC):
             assert case._result is not None
             results[case._type] += (
                 f"<tr><td>{counters[case._type]}</td>"
-                f"<td>{case._description}</td>"
-                f"<td><pre>{_htmlify(case._expected)}</pre></td>"
-                f"<td><pre>{_htmlify(case._outcome)}</pre></td>"
+                f"<td>{_htmlify(case._description)}</td>"
+                f"<td>{_htmlify(case._expected)}</td>"
+                f"<td>{_htmlify(case._outcome)}</td>"
                 f"<td>{case._result.name}</td></tr>").replace(
                     '<td>', f'<td style="{td_style}">')
             counters[case._type] += 1
@@ -251,7 +303,7 @@ class TestCase(ABC):
     def __str__(self) -> str:
         """Simple string representation fdor printing"""
         assert self._result is not None
-        return (f"{self._description}\n"
+        return (f"--- {self._description} ---\n"
                 f"Expected: \n{self._expected}\n"
                 f"Outcome: \n{self._outcome}\n"
                 f"Result: {self._result.name}")
@@ -292,7 +344,7 @@ class AssertRaises(TestCase):
             raise TestErrorImpl(f"{self._exc_type.__name__} was not "
                                 f"raised.")
         except self._exc_type as e:
-            self.set_outcome(f"Exception was raised: {e}.")
+            self.set_outcome(f"Exception was raised: ```\n{e}\n```")
 
 
 class AssertNoRaises(TestCase):
@@ -311,7 +363,7 @@ class AssertNoRaises(TestCase):
                  test_type: TestType = TestType.INVALID):
         super().__init__(
             test_type, description,
-            expected=f"Expected {exc_type.__name__} not to be raised.")
+            expected=f"Expected `{exc_type.__name__}` not to be raised")
         self._exc_type = exc_type
 
     # For use as decorator
