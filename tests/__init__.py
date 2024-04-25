@@ -1,14 +1,12 @@
 """Testing package to test the library's functionality"""
 
 __author__ = "Callum Hynes"
-__all__ = ["run_tests"]
 
-import sys
 from regex.regexutil import MatchConditions  # type: ignore
 from .regex_tests import (NodeMatcher, RegexState,
                           TestNoParseError, TestParseError,
                           TestRegexMatches, TestRegexShape)
-from .test import ResultType, TestCase, TestType, _copy_html
+from .test import TestType
 
 # pylint: disable=missing-function-docstring
 
@@ -327,25 +325,3 @@ TestRegexMatches(
         "+64 022 345 6789",
         "+123456789999")                                           \
     .assert_doesnt_match("41568739037463", "+()--", "")
-
-
-def run_tests():
-    """Run all tests and output to user"""
-    print("Running tests...")
-    results = TestCase.run_cases()
-    print("TEST SUMMARY:")
-    print(TestCase.format_results_table(results))
-    if "--full-output" in sys.argv:
-        output = TestCase.produce_html_printout()
-        if _copy_html(output):
-            print("Full results in clipboard")
-        else:
-            # Print header
-            print(f"\n{'='*20}\n|{'Full Output':^18}|\n{'='*20}\n")
-            print(output)
-    failed = sum(tests[ResultType.FAIL] + tests[ResultType.ERROR]
-                 for tests in results.values())
-    if failed and __debug__:
-        # pylint: disable-next=protected-access
-        TestRegexShape._failed_regex.display()
-    sys.exit(failed)

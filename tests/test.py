@@ -257,6 +257,16 @@ class TestCase(ABC):
                              for test_type in TestType
                              if test_type != TestType.TOTAL))
 
+    @staticmethod
+    def print_failed():
+        """Print all of the failed tests"""
+        print(f"{'='*20}\n|{'Failed Tests:':^18}|\n{'='*20}")
+        for case in TestCase._test_cases:
+            # pylint: disable=protected-access
+            assert case._result is not None
+            if case._result != ResultType.PASS:
+                print(case)
+
     def __init__(self, test_type: TestType, description: str,
                  *, expected: str | None = None):
         self._type = test_type

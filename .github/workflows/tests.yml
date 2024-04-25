@@ -27,4 +27,4 @@ jobs:
         pip install $(ls dist/*.whl)
     - name: Running tests
       run: |
-        python -O -m tests --full-output
+        python -m tests --headless

@@ -4,6 +4,7 @@ __author__ = "Callum Hynes"
 __all__ = ["RegexState", "NodeMatcher", "TestRegexShape",
            "TestRegexMatches", "TestNoParseError", "TestParseError"]
 
+import sys
 from enum import IntEnum, auto
 from typing import Callable, Literal, Self, assert_never, override
 
@@ -17,7 +18,7 @@ from .test import (AssertNoRaises, AssertRaises, ResultType, TestCase,
 from .test_error import (EdgeNotFoundError, ExtraEdgesError,
                          RegexMatchError, StateIdentityError)
 
-if __debug__:
+if __debug__ and not '--headless' in sys.argv:
     from regex.debug_graph_viewer import (DebugGraphViewer,
                                           MultiFigureViewer)
 
@@ -447,7 +448,7 @@ class TestRegexShape(TestCase):
     that the decorated function is able to describe the expected "shape"
     of the Regex
     """
-    if __debug__:
+    if __debug__ and not '--headless' in sys.argv:
         _failed_regex: MultiFigureViewer = MultiFigureViewer()
         """A viewer containing diagrams of all the failed test cases"""
 
@@ -532,7 +533,8 @@ class TestRegexShape(TestCase):
     def run(self):
         super().run()
         # On fail, create debug views for debugging
-        if self._result == ResultType.FAIL:
+        if (self._result == ResultType.FAIL
+                and __debug__ and not '--headless' in sys.argv):
             assert self._debug_regex is not None
             fig = DebugGraphViewer(self._debug_regex.edge_map,
                                    self._debug_regex.start,
