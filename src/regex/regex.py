@@ -44,6 +44,8 @@ class Regex:
         if __debug__:
             Regex._debug_function(self, msg)
 
+    base: 'Regex | None' = None
+
     # pylint: disable-next=no-member, unsubscriptable-object
     edge_map: np.ndarray[Any, np.dtypes.ObjectDType]
     """
@@ -187,7 +189,9 @@ class Regex:
         """
         # if not self.edge_map[start_state, end_state]:
         #     self.edge_map[start_state, end_state] = set()
-        self.edge_map[start_state, end_state].add(connection)
+        if not connection.kind_of_in(self.edge_map[start_state,
+                                                   end_state]):
+            self.edge_map[start_state, end_state].add(connection)
 
     def connect_many(self,
                      start_state: State,
@@ -208,7 +212,7 @@ class Regex:
         #     self.edge_map[start_state, end_state] = set()
         # Deep copy needed
         for edge in connections:
-            self.edge_map[start_state, end_state].add(edge.copy())
+            self.connect(start_state, end_state, edge.copy())
 
     def _num_inputs(self, state: State) -> int:
         """
@@ -510,6 +514,12 @@ class Regex:
         Returns:
             A new Regex which matches the reverse strings.
         """
+        if self.base is not None:
+            # Avoiding cyclic dependancy due to type annotations
+            # pylint: disable-next=import-outside-toplevel
+            from .regex_optimiser import _OptimiseRegex
+            result = self.base.reverse()
+            _OptimiseRegex(self.base)
         result = self.copy()
         result.edge_map = result.edge_map.transpose()
         result.start = self.end

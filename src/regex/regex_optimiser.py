@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from typing import Callable, Iterable, Self, override
 import weakref
 
-import regex as rx  # Type annotating
+from .regex import Regex  # Type annotating
 from .regexutil import (ConsumeAny, ConsumeString, MatchConditions,
                         ParserPredicate, SignedSet, State)
 
@@ -150,7 +150,7 @@ class _OptimiseRegex(_MovingIndexHandler):
     # Requires a lot of access to Regex objects
     # pylint: disable=protected-access
 
-    regex: 'rx.Regex'
+    regex: Regex
     """The Regex to optimise"""
 
     todo: set[_MovingIndex]
@@ -161,7 +161,7 @@ class _OptimiseRegex(_MovingIndexHandler):
         """Amount of states to iterate"""
         return self.regex.size
 
-    def __init__(self, regex: 'rx.Regex'):
+    def __init__(self, regex: Regex):
         """
         Optimises a Regex to use minimal states without any epsilon moves or
         non-deterministic junctions
@@ -250,7 +250,6 @@ class _OptimiseRegex(_MovingIndexHandler):
                     continue
                 if i.removed():
                     break
-                # minimisation
                 self.minimise(i, j)
             else:
                 # > Powerset construction <
@@ -292,9 +291,15 @@ class _OptimiseRegex(_MovingIndexHandler):
         if (MatchConditions.epsilon_transition
                 not in self.regex.edge_map[start.value(), end.value()]):
             return  # return early if no epsilon moves
-
-        if (self.regex._num_inputs(end.value()) == 1
-                or self.regex._num_outputs(start.value()) == 1):
+        num_inputs = self.regex._num_inputs(end.value())
+        num_outputs = self.regex._num_outputs(start.value())
+        start_loops = self.regex.edge_map[start.value(), start.value()]
+        end_loops = self.regex.edge_map[end.value(), end.value()]
+        if (num_inputs == 1 or num_outputs == 1
+                or (not ParserPredicate.set_mutable_symdiff(
+                    start_loops, end_loops)
+                    and (num_inputs == 1 + len(end_loops)
+                         or num_outputs == 1 + len(start_loops)))):
             # Trivial case, can simply merge two states
             self.regex.edge_map[start.value(), end.value()].remove(
                 MatchConditions.epsilon_transition)
@@ -428,6 +433,8 @@ class _OptimiseRegex(_MovingIndexHandler):
                            MatchConditions.epsilon_transition)
         self.regex._debug(f"power {state} -> {out1} & {out2} -> "
                           f"{new_state}")
+        if self.regex.edge_map[out2.value(), state.value()]:
+            out1, out2 = out2, out1
         if self.regex._remove_if_unreachable(out1.value()):
             self.remove(out1)
         else:
