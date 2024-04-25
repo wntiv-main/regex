@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+dynamic = ["version"]
+name = "regex"
+description = "DFA-based regular expressions in Python"
+readme = "README.md"
+license = {text="None"}
+keywords = ["DFA", "regex", "regular expressions"]
+requires-python = ">= 3.12"
+dependencies = [
+	"numpy"
+]
+authors = [
+	{name="Callum Hynes", email="hynescj20@cashmere.school.nz"}
+]
+classifiers = [
+	"Private :: Do Not Upload (school project only)"
+]
+
+[project.optional-dependencies]
+DebugGraphViewer = [
+	"matplotlib",
+	"networkx",
+	"scipy",
+	"PyQt5"
+]
+copy_html = [
+	"pywin32"
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "regex.__version__"}

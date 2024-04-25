@@ -1,0 +1,17 @@
+README.md
+pyproject.toml
+setup.py
+src/regex/__init__.py
+src/regex/debug_graph_viewer.py
+src/regex/networkx_curved_label.py
+src/regex/regex.py
+src/regex/regex_factory.py
+src/regex/regex_optimiser.py
+src/regex/regexutil.py
+src/regex.egg-info/PKG-INFO
+src/regex.egg-info/SOURCES.txt
+src/regex.egg-info/dependency_links.txt
+src/regex.egg-info/requires.txt
+src/regex.egg-info/top_level.txt
+tests/test.py
+tests/test_error.py

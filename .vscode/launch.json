@@ -5,18 +5,29 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"name": "Python: Run Main",
-			"type": "python",
+			"name": "Python: Run Tests",
+			"type": "debugpy",
 			"request": "launch",
-			"program": "${workspaceFolder}/src/__main__.py",
-			"justMyCode": false,
+			"module": "tests",
+			"args": ["--full-output"],
 			"console": "integratedTerminal"
 		},
 		{
-			"name": "Python: Run DebugGraphViewer",
-			"type": "python",
+			"name": "Python: Run Tests (Distribution)",
+			"type": "debugpy",
 			"request": "launch",
-			"program": "${workspaceFolder}/src/debug_graph_viewer.py",
+			"module": "tests",
+			"args": ["--full-output"],
+			"console": "integratedTerminal",
+			"preLaunchTask": "Deploy: Install module",
+			"postDebugTask": "Develop: Reinstall module"
+		},
+		{
+			"name": "Python: Run Playground",
+			"type": "debugpy",
+			"request": "launch",
+			"program": "${workspaceFolder}/playground.py",
+			"justMyCode": false,
 			"console": "integratedTerminal"
 		}
 	]

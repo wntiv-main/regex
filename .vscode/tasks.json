@@ -1,0 +1,74 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Develop: Install module",
+			"command": "${command:python.interpreterPath}",
+			"type": "shell",
+			"args": [
+				"-m",
+				"pip",
+				"install",
+				"--editable",
+				"${workspaceFolder}"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "Deploy: Build module",
+			"command": "${command:python.interpreterPath}",
+			"type": "shell",
+			"args": ["-m", "build"],
+			"dependsOn": ["Clean build output"],
+			"problemMatcher": []
+		},
+		{
+			"label": "Deploy: Install module",
+			"command": "${command:python.interpreterPath}",
+			"type": "shell",
+			"args": [
+				"-m",
+				"pip",
+				"install",
+				"\"${workspaceFolder}/dist/$((ls dist/*.whl)[0].Name)\""
+			],
+			"problemMatcher": [],
+			"dependsOn": ["Uninstall module", "Deploy: Build module"]
+		},
+		{
+			"label": "Uninstall module",
+			"command": "${command:python.interpreterPath}",
+			"type": "shell",
+			"args": ["-m", "pip", "uninstall", "regex", "-y"],
+			"problemMatcher": []
+		},
+		{
+			"label": "Develop: Reinstall module",
+			"hide": true,
+			"dependsOn": ["Uninstall module", "Develop: Install module"],
+			"dependsOrder": "sequence",
+			"problemMatcher": []
+		},
+		{
+			"label": "Clean build output",
+			"dependsOn": ["Clean build dir", "Clean dist dir"],
+			"problemMatcher": []
+		},
+		{
+			"label": "Clean build dir",
+			"hide": true,
+			"command": "rm",
+			"type": "shell",
+			"args": ["-r", "-force", "${workspaceFolder}/build/*"],
+			"problemMatcher": []
+		},
+		{
+			"label": "Clean dist dir",
+			"hide": true,
+			"command": "rm",
+			"type": "shell",
+			"args": ["-r", "-force", "${workspaceFolder}/dist/*"],
+			"problemMatcher": []
+		}
+	]
+}
