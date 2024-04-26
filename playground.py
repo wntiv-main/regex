@@ -28,7 +28,7 @@ def main():
         print(f"dupls: {rx._find_double_refs()}")
     Regex._debug_function = debug
     try:
-        rx = Regex(r"w+@w+\.w+")
+        rx = Regex(r"\w+(?:\.\w+)*@\w+(?:\.\w+)+")
         print(rx)
         mfv.add(DebugGraphViewer(rx.edge_map,
                                  rx.start, rx.end).render())

@@ -214,31 +214,39 @@ class Regex:
         for edge in connections:
             self.connect(start_state, end_state, edge.copy())
 
-    def _num_inputs(self, state: State) -> int:
+    def _num_inputs(self, state: State,
+                    exclude_self: bool = False) -> int:
         """
         Count the number of transitions which are inputs to the state.
 
         Arguments:
             state -- Which state to count inputs for.
+            exclude_self -- Whether self-loops should be ignored
 
         Returns:
             The amount of inputs to the given state
         """
         return (np.sum(np.vectorize(len)(self.edge_map[:, state]))
+                - (len(self.edge_map[state, state])
+                    if exclude_self else 0)
                 # Phantom input to start state
                 + (state == self.start))
 
-    def _num_outputs(self, state: State) -> int:
+    def _num_outputs(self, state: State,
+                     exclude_self: bool = False) -> int:
         """
         Count the number of transitions which are outputs to the state.
 
         Arguments:
             state -- Which state to count outputs for.
+            exclude_self -- Whether self-loops should be ignored
 
         Returns:
             The amount of outputs to the given state
         """
         return (np.sum(np.vectorize(len)(self.edge_map[state, :]))
+                - (len(self.edge_map[state, state])
+                    if exclude_self else 0)
                 # Phantom ouput from end state
                 + (state == self.end))
 
@@ -253,7 +261,8 @@ class Regex:
         Returns:
             Boolean indicating whether or not the state was deleted.
         """
-        if self._num_inputs(state) < 1 or self._num_outputs(state) < 1:
+        if (self._num_inputs(state, exclude_self=True) < 1
+                or self._num_outputs(state, exclude_self=True) < 1):
             self._remove_state(state)
             return True
         return False

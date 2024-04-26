@@ -291,15 +291,13 @@ class _OptimiseRegex(_MovingIndexHandler):
         if (MatchConditions.epsilon_transition
                 not in self.regex.edge_map[start.value(), end.value()]):
             return  # return early if no epsilon moves
-        num_inputs = self.regex._num_inputs(end.value())
-        num_outputs = self.regex._num_outputs(start.value())
+        num_inputs = self.regex._num_inputs(end.value(), exclude_self=True)
+        num_outputs = self.regex._num_outputs(start.value(), exclude_self=True)
         start_loops = self.regex.edge_map[start.value(), start.value()]
         end_loops = self.regex.edge_map[end.value(), end.value()]
-        if (num_inputs == 1 or num_outputs == 1
-                or (not ParserPredicate.set_mutable_symdiff(
-                    start_loops, end_loops)
-                    and (num_inputs == 1 + len(end_loops)
-                         or num_outputs == 1 + len(start_loops)))):
+        if ((num_inputs == 1 or num_outputs == 1)
+            and not ParserPredicate.set_mutable_symdiff(
+                start_loops, end_loops)):
             # Trivial case, can simply merge two states
             self.regex.edge_map[start.value(), end.value()].remove(
                 MatchConditions.epsilon_transition)
@@ -368,7 +366,7 @@ class _OptimiseRegex(_MovingIndexHandler):
             self.remove(s2)
             self.regex._debug(f"merged {s2} -> {s1}")
 
-    def powerset_construction(
+    def powerset_construction(  # pylint: disable=design
             self, state: _MovingIndex,
             out1: _MovingIndex, out2: _MovingIndex) -> None:
         """
@@ -427,32 +425,56 @@ class _OptimiseRegex(_MovingIndexHandler):
             intersect = ConsumeAny(intersection)
         self.regex.connect(state.value(), new_state.value(), intersect)
         # Connect outputs
-        self.regex.connect(new_state.value(), out1.value(),
-                           MatchConditions.epsilon_transition)
-        self.regex.connect(new_state.value(), out2.value(),
-                           MatchConditions.epsilon_transition)
-        self.regex._debug(f"power {state} -> {out1} & {out2} -> "
-                          f"{new_state}")
-        if self.regex.edge_map[out2.value(), state.value()]:
-            out1, out2 = out2, out1
-        if self.regex._remove_if_unreachable(out1.value()):
+        # if (self.regex.edge_map[out1.value(), state.value()]
+        #         or self.regex.edge_map[out2.value(), state.value()]):
+        #     # Loop, use e-moves to connect
+        #     self.regex.connect(new_state.value(), out1.value(),
+        #                        MatchConditions.epsilon_transition)
+        #     self.regex.connect(new_state.value(), out2.value(),
+        #                        MatchConditions.epsilon_transition)
+        #     self.regex._debug(f"power {state} -> {out1} & {out2} -> "
+        #                       f"{new_state}")
+        #     if self.regex.edge_map[out2.value(), state.value()]:
+        #         out1, out2 = out2, out1
+        #     if self.regex._remove_if_unreachable(out1.value()):
+        #         self.remove(out1)
+        #     else:
+        #         self.epsilon_closure(new_state, out1)
+        #     if self.regex._remove_if_unreachable(out2.value()):
+        #         self.remove(out2)
+        #     elif not new_state.removed():
+        #         self.epsilon_closure(new_state, out2)
+        #     return
+        # Otherwise, merge
+        self.regex._merge_outputs(new_state.value(), out1.value())
+        self.regex._merge_outputs(new_state.value(), out2.value())
+        was_loops1: set[ParserPredicate] = self.regex.edge_map[
+            new_state.value(), out1.value()]
+        was_loops2: set[ParserPredicate] = self.regex.edge_map[
+            new_state.value(), out2.value()]
+        loops: set[ParserPredicate] = self.regex.edge_map[
+            new_state.value(), new_state.value()]
+        for edge in was_loops1.copy():
+            if (other := edge.kind_of_in(was_loops2)) is not None:
+                # Shared loops
+                was_loops1.remove(edge)
+                was_loops2.remove(other)
+                self.regex.connect(new_state.value(), new_state.value(),
+                                   edge)
+        for edge in loops:
+            if (other := edge.kind_of_in(was_loops1)):
+                was_loops1.remove(other)
+            if (other := edge.kind_of_in(was_loops2)):
+                was_loops2.remove(other)
+        msg = f"power2 {state} -> {out1} & {out2} -> {new_state}"
+        if out1.value() == self.regex.end:
+            self.regex.connect(new_state.value(), out1.value(),
+                               MatchConditions.epsilon_transition)
+        elif self.regex._remove_if_unreachable(out1.value()):
             self.remove(out1)
-        else:
-            self.epsilon_closure(new_state, out1)
-        if self.regex._remove_if_unreachable(out2.value()):
+        if out2.value() == self.regex.end:
+            self.regex.connect(new_state.value(), out2.value(),
+                               MatchConditions.epsilon_transition)
+        elif self.regex._remove_if_unreachable(out2.value()):
             self.remove(out2)
-        elif not new_state.removed():
-            self.epsilon_closure(new_state, out2)
-        # with np.nditer(
-        #         [self.regex.edge_map[out1, :],
-        #          self.regex.edge_map[out2, :],
-        #          self.regex.edge_map[new_state, :]],
-        #         flags=['refs_ok'],
-        #         op_flags=[['readonly'], ['readonly'], ['writeonly']]) as it:
-        #     for i1, i2, o in it:
-        #         o[...] = i1 | i2
-
-        # for j in range(self.regex.size):
-        #     for edge in self.regex.edge_map[out1, j]\
-        #             | self.regex.edge_map[out2, j]:
-        #         self.regex.connect(new_state, j, edge.copy())
+        self.regex._debug(msg)
