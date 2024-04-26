@@ -174,6 +174,21 @@ class _OptimiseRegex(_MovingIndexHandler):
         self.todo = set(map(self.index, range(self.regex.size)))
         self.optimise()
 
+    def _can_minify_between(self, edge: ParserPredicate,
+                            s1: State, s2: State):
+        return (edge == MatchConditions.epsilon_transition
+                or (edge.kind_of_in(self.regex.edge_map[s1, s1])
+                    and edge.kind_of_in(self.regex.edge_map[s2, s2]))
+                or (edge.kind_of_in(self.regex.edge_map[s1, s2])
+                    and edge.kind_of_in(self.regex.edge_map[s2, s1]))
+                or (edge in self.regex.edge_map[s1, s1]
+                    and MatchConditions.epsilon_transition
+                    in self.regex.edge_map[s2, s1])
+                or (edge in self.regex.edge_map[s1, s1]
+                    and MatchConditions.epsilon_transition
+                    in self.regex.edge_map[s1, s2]
+                    and self.regex._num_inputs(s2, exclude_self=True) == 1))
+
     def can_minify_inputs(self, s1: State, s2: State) -> bool:
         """
         Compares the inputs of two states
@@ -185,16 +200,15 @@ class _OptimiseRegex(_MovingIndexHandler):
         if s1 == s2 or self.regex.start in {s1, s2}:
             return False
         for i in range(self.regex.size):
-            if i in {s1, s2}:
-                diff = ParserPredicate.set_mutable_symdiff(
-                    self.regex.edge_map[i, s1],
-                    self.regex.edge_map[i, s2])
-                for edge in diff:
-                    if edge != MatchConditions.epsilon_transition:
-                        return False
-            elif (self.regex.edge_map[i, s1]
-                  != self.regex.edge_map[i, s2]):
-                return False
+            diff = ParserPredicate.set_mutable_symdiff(
+                self.regex.edge_map[i, s1],
+                self.regex.edge_map[i, s2])
+            for edge in diff:
+                if i not in {s1, s2}:
+                    return False
+                j = i ^ s1 ^ s2  # {s1, s2} that is NOT i
+                if not self._can_minify_between(edge, i, j):
+                    return False
         return True
 
     def can_minify_outputs(self, s1: State, s2: State) -> bool:
@@ -215,16 +229,15 @@ class _OptimiseRegex(_MovingIndexHandler):
                 self.regex.end]):
             return False
         for i in range(self.regex.size):
-            if i in {s1, s2}:
-                diff = ParserPredicate.set_mutable_symdiff(
-                    self.regex.edge_map[s1, i],
-                    self.regex.edge_map[s2, i])
-                for edge in diff:
-                    if edge != MatchConditions.epsilon_transition:
-                        return False
-            elif (self.regex.edge_map[s1, i]
-                  != self.regex.edge_map[s2, i]):
-                return False
+            diff = ParserPredicate.set_mutable_symdiff(
+                self.regex.edge_map[s1, i],
+                self.regex.edge_map[s2, i])
+            for edge in diff:
+                if i not in {s1, s2}:
+                    return False
+                j = i ^ s1 ^ s2  # {s1, s2} that is NOT i
+                if not self._can_minify_between(edge, i, j):
+                    return False
         return True
 
     def optimise(self):  # pylint: disable=too-many-branches
@@ -245,6 +258,9 @@ class _OptimiseRegex(_MovingIndexHandler):
                 continue
             # Iterate states inner loop
             for j in self.iterate():
+                self.minimise(i, j)
+                if j.removed():
+                    continue
                 self.epsilon_closure(i, j)
                 if j.removed():
                     continue
@@ -425,8 +441,8 @@ class _OptimiseRegex(_MovingIndexHandler):
             intersect = ConsumeAny(intersection)
         self.regex.connect(state.value(), new_state.value(), intersect)
         # Connect outputs
-        # if (self.regex.edge_map[out1.value(), state.value()]
-        #         or self.regex.edge_map[out2.value(), state.value()]):
+        # if (out1.value() == self.regex.start
+        #     or out2.value() == self.regex.start):
         #     # Loop, use e-moves to connect
         #     self.regex.connect(new_state.value(), out1.value(),
         #                        MatchConditions.epsilon_transition)
