@@ -6,6 +6,7 @@ __all__ = ["_OptimiseRegex"]
 from abc import ABC, abstractmethod
 from typing import Callable, Iterable, Self, override
 import weakref
+import numpy as np
 
 from .regex import Regex  # Type annotating
 from .regexutil import (ConsumeAny, ConsumeString, MatchConditions,
@@ -174,8 +175,45 @@ class _OptimiseRegex(_MovingIndexHandler):
         self.todo = set(map(self.index, range(self.regex.size)))
         self.optimise()
 
+    def _get_unreachable_at(self, state: State) -> set[State]:
+        todo: set[State] = {state}
+        visited: set[State] = set()
+        while todo:
+            s = todo.pop()
+            if s == self.regex.start:
+                break
+            if s in visited:
+                continue
+            visited.add(s)
+            todo |= set(np.argwhere(
+                self.regex.edge_map[:, s]).flat)  # type: ignore
+        else:  # No path to start
+            return visited
+        return set()
+
+    def _remove_group_if_unreachable(self, start: State) -> bool:
+        states = self._get_unreachable_at(start)
+        # Iterate in reverse to avoid shifting indices
+        states = sorted(states, reverse=True)
+        for state in states:
+            self.regex._remove_state(state)
+            self.remove(state)
+        return bool(states)
+
     def _can_minify_between(self, edge: ParserPredicate,
                             s1: State, s2: State):
+        """
+        Returns whether an edge between two states should block the
+        states from mwerging
+
+        Arguments:
+            edge -- The edge to check
+            s1 -- The state which the edge is leaving
+            s2 -- The state which the edge is entering
+
+        Returns:
+            Whether the states are still able to merge
+        """
         return (edge == MatchConditions.epsilon_transition
                 or (edge.kind_of_in(self.regex.edge_map[s1, s1])
                     and edge.kind_of_in(self.regex.edge_map[s2, s2]))
@@ -187,7 +225,8 @@ class _OptimiseRegex(_MovingIndexHandler):
                 or (edge in self.regex.edge_map[s1, s1]
                     and MatchConditions.epsilon_transition
                     in self.regex.edge_map[s1, s2]
-                    and self.regex._num_inputs(s2, exclude_self=True) == 1))
+                    and self.regex._num_inputs(s2,
+                                               exclude_self=True) == 1))
 
     def can_minify_inputs(self, s1: State, s2: State) -> bool:
         """
@@ -253,8 +292,7 @@ class _OptimiseRegex(_MovingIndexHandler):
             if not __debug__ and i.value() > self.size():
                 continue
             # Remove redundant states
-            if self.regex._remove_if_unreachable(i.value()):
-                self.remove(i)
+            if self._remove_group_if_unreachable(i.value()):
                 continue
             # Iterate states inner loop
             for j in self.iterate():
@@ -330,16 +368,15 @@ class _OptimiseRegex(_MovingIndexHandler):
             self.regex.edge_map[end.value(), end.value()].discard(
                 MatchConditions.epsilon_transition)
             self.regex._merge_outputs(start.value(), end.value())
-            if self.regex._remove_if_unreachable(end.value()):
-                self.remove(end)
-            else:
-                self.todo.add(self.index(end))
+            self.todo.add(self.index(end))
+            self._remove_group_if_unreachable(end.value())
             self.regex._debug(f"e-closed {start} <- {end}")
             # Reset outer loop to give other states a chance to run
             self.todo.add(self.index(start))
             start.reset_iteration()
         else:
             # Merge outputs in the hope that these states can be merged
+            # pass
             if self.regex._merge_outputs(start.value(), end.value()):
                 self.todo.add(self.index(start))
             self.regex._debug(f"mrgd out {start} <- {end}")
@@ -394,55 +431,80 @@ class _OptimiseRegex(_MovingIndexHandler):
             out1, out2 -- The output states
         """
         # Check if sets have any overlap
-        row_set = self.regex.edge_map[state.value(), out1.value()]
-        column_set = self.regex.edge_map[state.value(), out2.value()]
+        set1 = self.regex.edge_map[state.value(), out1.value()]
+        set2 = self.regex.edge_map[state.value(), out2.value()]
         # if MatchConditions.epsilon_transition in (row_set | column_set):
         #     if (out2.value() != self.regex.end
         #             and out1.value() != self.regex.end):
         #         # Unless e-move to end, retry
         #         self.todo.add(self.index(state))
         #         return
-        row_coverage = SignedSet.union(
-            *(x.coverage() for x in row_set
+        coverage1 = SignedSet.union(
+            *(x.coverage() for x in set1
               if x != MatchConditions.epsilon_transition))
-        column_coverage = SignedSet.union(
-            *(x.coverage() for x in column_set
+        coverage2 = SignedSet.union(
+            *(x.coverage() for x in set2
               if x != MatchConditions.epsilon_transition))
-        intersection = row_coverage & column_coverage
+        intersection = coverage1 & coverage2
         if not intersection:
             return  # No overlap, exit early
         # Overlap, need powerset
         # Remove intersection from both initial states
-        for edge in row_set | column_set:
-            match edge:
-                case ConsumeAny():
-                    edge.match_set -= intersection
-                    if not edge.match_set:
-                        row_set.discard(edge)
-                        column_set.discard(edge)
-                case ConsumeString():
-                    if edge.match_string in intersection:
-                        row_set.discard(edge)
-                        column_set.discard(edge)
-                case MatchConditions.epsilon_transition:
-                    pass
-                case _:
-                    raise NotImplementedError()
+        for edges in set1, set2:
+            for edge in edges.copy():
+                match edge:
+                    case ConsumeAny():
+                        edge.match_set -= intersection
+                        if not edge.match_set:
+                            edges.discard(edge)
+                    case ConsumeString():
+                        if edge.match_string in intersection:
+                            edges.remove(edge)
+                    case MatchConditions.epsilon_transition:
+                        pass
+                    case _:
+                        raise NotImplementedError()
         # States were changed, check again
         self.todo.add(self.index(out1))
         self.todo.add(self.index(out2))
-        # Add new state for the intersection
-        new_state = self.index(self.regex.add_state())
-        self.todo.add(self.index(new_state))
         intersect: ParserPredicate
         if intersection.length() == 1:
             intersect = ConsumeString(intersection.unwrap_value())
         else:
             intersect = ConsumeAny(intersection)
+        for out in out1, out2:
+            other = out.value() ^ out1.value() ^ out2.value()
+            if out.value() == self.regex.end:
+                self.regex.connect(other, out.value(),
+                                   MatchConditions.epsilon_transition)
+                self.regex.connect(state.value(),
+                                   out.value(), intersect)
+                self.regex._debug(f"endmrg {state} -> {out} <& {other}")
+                return
+            if (not self.regex.edge_map[state.value(), out.value()]
+                and (self.regex._num_inputs(out.value(),
+                                            exclude_self=True) == 0
+                     or state.value() == self.regex.start)):
+                # One side covered by intersection
+                # other = out.value() ^ out1.value() ^ out2.value()
+                self.regex.connect(state.value(),
+                                   out.value(), intersect)
+                self.regex._merge_outputs(out.value(), other)
+                old_loops = self.regex.edge_map[out.value(), other]
+                loops = self.regex.edge_map[out.value(), out.value()]
+                for edge in old_loops.copy():
+                    if edge.kind_of_in(loops):
+                        old_loops.remove(edge)
+                self._remove_group_if_unreachable(other)
+                self.regex._debug(f"pstmrg {state} -> {out} <& {other}")
+                return
+        # Add new state for the intersection
+        new_state = self.index(self.regex.add_state())
+        self.todo.add(self.index(new_state))
         self.regex.connect(state.value(), new_state.value(), intersect)
         # Connect outputs
-        # if (out1.value() == self.regex.start
-        #     or out2.value() == self.regex.start):
+        # if (not self.regex.edge_map[state.value(), out1.value()]
+        #         and not self.regex.edge_map[state.value(), out2.value()]):
         #     # Loop, use e-moves to connect
         #     self.regex.connect(new_state.value(), out1.value(),
         #                        MatchConditions.epsilon_transition)
@@ -450,47 +512,52 @@ class _OptimiseRegex(_MovingIndexHandler):
         #                        MatchConditions.epsilon_transition)
         #     self.regex._debug(f"power {state} -> {out1} & {out2} -> "
         #                       f"{new_state}")
-        #     if self.regex.edge_map[out2.value(), state.value()]:
-        #         out1, out2 = out2, out1
-        #     if self.regex._remove_if_unreachable(out1.value()):
-        #         self.remove(out1)
-        #     else:
-        #         self.epsilon_closure(new_state, out1)
-        #     if self.regex._remove_if_unreachable(out2.value()):
-        #         self.remove(out2)
-        #     elif not new_state.removed():
-        #         self.epsilon_closure(new_state, out2)
-        #     return
+        #     loops1: set[ParserPredicate] = self.regex.edge_map[
+        #         out1.value(), out1.value()]
+        #     loops2: set[ParserPredicate] = self.regex.edge_map[
+        #         out2.value(), out2.value()]
+        #     for edge in loops1.copy():
+        #         if edge.kind_of_in(loops2) is not None:
+        #             # Shared loops
+        #             self.regex.connect(new_state.value(), new_state.value(),
+        #                                edge.copy())
+        # if self.regex.edge_map[out2.value(), state.value()]:
+        #     out1, out2 = out2, out1
+        # if self.regex._remove_if_unreachable(out1.value()):
+        #     self.remove(out1)
+        # else:
+        #     self.epsilon_closure(new_state, out1)
+        # if self.regex._remove_if_unreachable(out2.value()):
+        #     self.remove(out2)
+        # elif not new_state.removed():
+        #     self.epsilon_closure(new_state, out2)
+        # return
         # Otherwise, merge
         self.regex._merge_outputs(new_state.value(), out1.value())
         self.regex._merge_outputs(new_state.value(), out2.value())
-        was_loops1: set[ParserPredicate] = self.regex.edge_map[
+        loops1: set[ParserPredicate] = self.regex.edge_map[
             new_state.value(), out1.value()]
-        was_loops2: set[ParserPredicate] = self.regex.edge_map[
+        loops2: set[ParserPredicate] = self.regex.edge_map[
             new_state.value(), out2.value()]
-        loops: set[ParserPredicate] = self.regex.edge_map[
+        old_loops: set[ParserPredicate] = self.regex.edge_map[
             new_state.value(), new_state.value()]
-        for edge in was_loops1.copy():
-            if (other := edge.kind_of_in(was_loops2)) is not None:
+        for edge in loops1.copy():
+            if (other := edge.kind_of_in(loops2)) is not None:
                 # Shared loops
-                was_loops1.remove(edge)
-                was_loops2.remove(other)
                 self.regex.connect(new_state.value(), new_state.value(),
-                                   edge)
-        for edge in loops:
-            if (other := edge.kind_of_in(was_loops1)):
-                was_loops1.remove(other)
-            if (other := edge.kind_of_in(was_loops2)):
-                was_loops2.remove(other)
+                                   edge.copy())
+        for edge in old_loops:
+            if (other := edge.kind_of_in(loops1)):
+                loops1.remove(other)
+            if (other := edge.kind_of_in(loops2)):
+                loops2.remove(other)
         msg = f"power2 {state} -> {out1} & {out2} -> {new_state}"
-        if out1.value() == self.regex.end:
-            self.regex.connect(new_state.value(), out1.value(),
-                               MatchConditions.epsilon_transition)
-        elif self.regex._remove_if_unreachable(out1.value()):
-            self.remove(out1)
-        if out2.value() == self.regex.end:
-            self.regex.connect(new_state.value(), out2.value(),
-                               MatchConditions.epsilon_transition)
-        elif self.regex._remove_if_unreachable(out2.value()):
-            self.remove(out2)
+        for out in out1, out2:
+            if out.value() == self.regex.end:
+                self.regex.connect(out.value(), new_state.value(),
+                                   MatchConditions.epsilon_transition)
+                self.regex.end = out.value()
+                self.todo.add(self.index(out))
+            else:
+                self._remove_group_if_unreachable(out.value())
         self.regex._debug(msg)

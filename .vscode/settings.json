@@ -12,5 +12,6 @@
 		"undefined-variable": "Warning"
 	},
 	"pylint.importStrategy": "fromEnvironment",
-	"python.analysis.extraPaths": ["./src"]
+	"python.analysis.extraPaths": ["./src"],
+	"editor.formatOnSave": false
 }
