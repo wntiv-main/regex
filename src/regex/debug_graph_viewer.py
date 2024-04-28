@@ -159,6 +159,8 @@ class DebugGraphViewer:
                                   list[tuple[int, int, int, str]]] = {}
         for start, end, key, label in self._graph.edges(
                 keys=True, data='label'): # type: ignore
+            if len(label) > 8:
+                label = label[:5] + '...'
             ordered = (min(start, end), max(start, end))
             if ordered in edges_by_conn:
                 edges_by_conn[ordered].append((start, end, key, label))

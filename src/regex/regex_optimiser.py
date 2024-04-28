@@ -475,11 +475,31 @@ class _OptimiseRegex(_MovingIndexHandler):
         for out in out1, out2:
             other = out.value() ^ out1.value() ^ out2.value()
             if out.value() == self.regex.end:
-                self.regex.connect(other, out.value(),
-                                   MatchConditions.epsilon_transition)
+                #  Connecting to end is special-case
+                # This is cursed just leave it be ;)
+                outs = self.regex.edge_map[out.value(), other].copy()
+                self.regex._merge_outputs(out.value(), other)
+                self.regex._debug(f"endmrg {state} -> {out} <& {other}")
+                for out_state in self.iterate():
+                    if out_state.value() == out.value():
+                        continue
+                    if not self.regex.edge_map[
+                            other, out_state.value()]:
+                        continue  # Fast path
+                    for out_end_state in self.iterate():
+                        if out_end_state.value() == out.value():
+                            continue # no self-loops for now
+                        if not self.regex.edge_map[
+                                out.value(), out_end_state.value()]:
+                            continue # Fast path
+                        if out_state.value() == out_end_state.value():
+                            continue # Same `to` state
+                        self.powerset_construction(
+                            out, out_state, out_end_state)
+                self.regex.edge_map[out.value(), other] = outs
                 self.regex.connect(state.value(),
                                    out.value(), intersect)
-                self.regex._debug(f"endmrg {state} -> {out} <& {other}")
+                self.regex._debug(f"fndmrg {state} -> {out} <& {other}")
                 return
             if (not self.regex.edge_map[state.value(), out.value()]
                 and (self.regex._num_inputs(out.value(),
