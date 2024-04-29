@@ -17,7 +17,7 @@ class _MovingIndexHandler(ABC):
     """
     Manages a set of indices attached to a iterable, so that concurrent
     modification and iteration are properly handled, by updating all
-    references to indices withing the list
+    references to indices within the list
     """
 
     _instances: weakref.WeakSet['_MovingIndex']
@@ -157,6 +157,58 @@ class _OptimiseRegex(_MovingIndexHandler):
     todo: set[_MovingIndex]
     """Set of states that should be visited"""
 
+    compositions: dict[_MovingIndex, list[_MovingIndex]]
+
+    def add_compositions(self, state: _MovingIndex | int,
+                         *new_composites: _MovingIndex) -> None:
+        """
+        Tag the given state as being composed of the other given states,
+        in powerset construction
+
+        Arguments:
+            state -- The state being marked as composite
+            *new_composites -- The states that make the composite state
+        """
+        if isinstance(state, _MovingIndex):
+            state = state.value()
+        for key, composites in self.compositions.items():
+            # dont get confused between key/value pairs and the key's
+            # internal value!!
+            if key.value() == state:
+                # Key already exists, update
+                composites.extend(new_composites)
+                break
+        # If you're this deep within the code, I expect you to know
+        # what a for...else statement is. If you don't like my use of
+        # them (some people complain that they don't read well) then
+        # shhhh... its my code not yours, I'm not going to make my code
+        # more complicated for "readability" when it reads perfectly
+        # well as is.
+        else:
+            # Create key
+            self.compositions[self.index(state)] = list(new_composites)
+
+    def get_compositions(self,
+                         state: _MovingIndex | int) -> tuple[int, ...]:
+        """
+        Get all of the states that compose this state (when this state
+        is the result of a composition of states durig powerset
+        construction)
+
+        Returns:
+            A collection of the composing indices
+        """
+        if isinstance(state, _MovingIndex):
+            state = state.value()
+        for key, value in self.compositions.items():
+            # dont get confused between key/value pairs and the key's
+            # internal value!!
+            if key.value() == state:
+                # Map is lazily-computed, cast to tuple to force
+                # compution now, and avoid multiple-compution downstream
+                return tuple(map(_MovingIndex.value, value))
+        return ()
+
     @override
     def size(self) -> int:
         """Amount of states to iterate"""
@@ -173,11 +225,16 @@ class _OptimiseRegex(_MovingIndexHandler):
         super().__init__()
         self.regex = regex
         self.todo = set(map(self.index, range(self.regex.size)))
+        self.compositions = {}
         self.optimise()
 
-    def _get_unreachable_at(self, state: State) -> set[State]:
+    def _get_unreachable_at( # TODO: doc
+            self, state: State,
+            *, ignore_paths_through: set[State] | None
+                                      = None) -> set[State]:
         todo: set[State] = {state}
-        visited: set[State] = set()
+        visited: set[State] = (set() if ignore_paths_through is None
+                               else ignore_paths_through)
         while todo:
             s = todo.pop()
             if s == self.regex.start:
@@ -296,6 +353,9 @@ class _OptimiseRegex(_MovingIndexHandler):
                 continue
             # Iterate states inner loop
             for j in self.iterate():
+                # Minimise twice for good measure???
+                # (if it doesnt work i usually just copy/paste these 
+                #  lines and hope for the best ;) lol)
                 self.minimise(i, j)
                 if j.removed():
                     continue
@@ -305,6 +365,9 @@ class _OptimiseRegex(_MovingIndexHandler):
                 if i.removed():
                     break
                 self.minimise(i, j)
+                if j.removed():
+                    continue
+                self.simple_powerset_construction(i, j)
             else:
                 # > Powerset construction <
                 # While loop as expect size to change
@@ -424,6 +487,46 @@ class _OptimiseRegex(_MovingIndexHandler):
             self.remove(s2)
             self.regex._debug(f"merged {s2} -> {s1}")
 
+    def simple_powerset_construction(
+            self, start: _MovingIndex, end: _MovingIndex) -> None:
+        """
+        Merge multiple edges (between the same states) into one, if at
+        all possible
+
+        Arguments:
+            start -- The starting state
+            end -- The ending state
+        """
+        if len(self.regex.edge_map[start.value(), end.value()]) < 2:
+            return # No two edges to merge
+        accept: SignedSet[str] = SignedSet()
+        to_remove: list[ParserPredicate] = []
+        for edge in self.regex.edge_map[start.value(), end.value()]:
+            match edge:
+                case ConsumeAny():
+                    accept |= edge.match_set
+                    to_remove.append(edge)
+                case ConsumeString():
+                    accept.add(edge.match_string)
+                    to_remove.append(edge)
+                case _:
+                    pass
+        if accept.length() == 0:
+            return # No moves
+        if len(to_remove) < 2:
+            return # No need to re-create
+        for edge in to_remove:
+            self.regex.edge_map[start.value(), end.value()].remove(edge)
+        edge: ParserPredicate
+        if accept.length() == 1:
+            edge = ConsumeString(accept.unwrap_value())
+        else:
+            edge = ConsumeAny(accept)
+        # Connect new merged edge
+        self.regex.connect(start.value(), end.value(), edge)
+        # pylint: disable-next=protected-access
+        self.regex._debug(f"fixed {start} -> {end}")
+
     def powerset_construction(  # pylint: disable=design
             self, state: _MovingIndex,
             out1: _MovingIndex, out2: _MovingIndex) -> None:
@@ -479,7 +582,7 @@ class _OptimiseRegex(_MovingIndexHandler):
             intersect = ConsumeAny(intersection)
         for out in out1, out2:
             other = out.value() ^ out1.value() ^ out2.value()
-            if out.value() == self.regex.end:
+            if out.value() == self.regex.end and False: # TODO: ??
                 #  Connecting to end is special-case
                 # This is cursed just leave it be ;)
                 outs = self.regex.edge_map[out.value(), other].copy()
@@ -507,8 +610,9 @@ class _OptimiseRegex(_MovingIndexHandler):
                 self.regex._debug(f"fndmrg {state} -> {out} <& {other}")
                 return
             if (not self.regex.edge_map[state.value(), out.value()]
-                and (self.regex._num_inputs(out.value(),
-                                            exclude_self=True) == 0
+                and (self._get_unreachable_at(
+                        state.value(),
+                        ignore_paths_through={state.value()})
                      or state.value() == self.regex.start)):
                 # One side covered by intersection
                 # other = out.value() ^ out1.value() ^ out2.value()
@@ -525,6 +629,8 @@ class _OptimiseRegex(_MovingIndexHandler):
                 return
         # Add new state for the intersection
         new_state = self.index(self.regex.add_state())
+        self.add_compositions(new_state,
+                              self.index(out1), self.index(out2))
         self.todo.add(self.index(new_state))
         self.regex.connect(state.value(), new_state.value(), intersect)
         # Connect outputs
@@ -560,6 +666,7 @@ class _OptimiseRegex(_MovingIndexHandler):
         # Otherwise, merge
         self.regex._merge_outputs(new_state.value(), out1.value())
         self.regex._merge_outputs(new_state.value(), out2.value())
+        # for composite in self.get_compositions(out1)
         loops1: set[ParserPredicate] = self.regex.edge_map[
             new_state.value(), out1.value()]
         loops2: set[ParserPredicate] = self.regex.edge_map[

@@ -304,12 +304,8 @@ class Regex:
         assert source < self.size
         changed = False
         # Iterate s2 row and make same connections from s1
-        it = np.nditer(self.edge_map[source, :],
-                       flags=['c_index', 'refs_ok'])
-        for edges in it:
-            # thank numpy for [()]
-            src_set = edges[()]  # type: ignore
-            dst_set = self.edge_map[destination, it.index]
+        for index, src_set in enumerate(self.edge_map[source, :]):
+            dst_set = self.edge_map[destination, index]
             if changed:
                 pass  # Fast path, don't perform more comparisons
             elif (len(src_set) > len(dst_set)):
@@ -319,7 +315,7 @@ class Regex:
                 changed = True
             else:  # Skip merge if no changes made (small optimisation)
                 continue
-            self.connect_many(destination, it.index, src_set)
+            self.connect_many(destination, index, src_set)
         return changed
 
     def _merge_inputs(self, destination: State, source: State) -> bool:
@@ -339,12 +335,8 @@ class Regex:
         assert source < self.size
         changed = False
         # Iterate s2 column and make same connections to s1
-        it = np.nditer(self.edge_map[:, source],
-                       flags=['c_index', 'refs_ok'])
-        for edges in it:
-            # thank numpy for [()]
-            src_set = edges[()]  # type: ignore
-            dst_set = self.edge_map[it.index, destination]
+        for index, src_set in enumerate(self.edge_map[:, source]):
+            dst_set = self.edge_map[index, destination]
             if changed:
                 pass  # Fast path, don't perform more comparisons
             elif (len(src_set) > len(dst_set)):
@@ -354,7 +346,7 @@ class Regex:
                 changed = True
             else:  # Skip merge if no changes made (small optimisation)
                 continue
-            self.connect_many(it.index, destination, src_set)
+            self.connect_many(index, destination, src_set)
         return changed
 
     def _merge(self, destination: State, source: State) -> None:
