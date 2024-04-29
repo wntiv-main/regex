@@ -407,6 +407,11 @@ class _OptimiseRegex(_MovingIndexHandler):
             # Intended side-effect: will set s2's value to -1
             # Which will reset the caller's loop
             self.remove(s2)
+            # Mark all input states as dirty
+            for state, edges in enumerate(
+                    self.regex.edge_map[:, s1.value()]):
+                if edges:
+                    self.todo.add(self.index(state))
             self.regex._debug(f"merged {s2} -> {s1}")
         elif self.can_minify_inputs(s1.value(), s2.value()):
             if s2.value() == self.regex.end:
