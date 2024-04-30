@@ -592,6 +592,8 @@ class _OptimiseRegex(_MovingIndexHandler):
                 # i give up please stop asking me what this code does
                 # how tf am i meant to know
                 # it stops the forever loop bug thats all i know
+                # As everyone knows, the "TEMPORARY, FIX SOON" solutions
+                # are the ones that stick :D
                 all_edges: Iterable[set[ParserPredicate]]\
                     = self.regex.edge_map[out.value(), :]
                 end_out_coverage: SignedSet[str] = SignedSet.union(
@@ -599,6 +601,11 @@ class _OptimiseRegex(_MovingIndexHandler):
                       for edges in all_edges
                       for x in edges
                       if x != MatchConditions.epsilon_transition))
+                # something to do with checking if nthe end state has an
+                # output for all posssible chars, in which case powerset
+                # constrcution can be problematic or smth idk i was not
+                # thinking straight when i wrote this (nor am i now,
+                # probably)
                 if not end_out_coverage.negate():
                     self.regex.connect(state.value(),
                                     out.value(), intersect)

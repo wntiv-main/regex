@@ -31,6 +31,8 @@ def main():
         # r"\w+(?:\.\w+)*@\w+(?:\.\w+)+"
         rx = Regex(r"\w+(?:\.\w+)*@\w+(?:\.\w+)+")
         print(rx)
+        while (i := input("emailish??: ")):
+            print(rx.test(i))
         mfv.add(DebugGraphViewer(rx.edge_map,
                                  rx.start, rx.end).render())
     except Exception:
