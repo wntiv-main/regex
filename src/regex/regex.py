@@ -660,6 +660,7 @@ class Regex:
                                                  start=idx)) >= 0:
             starts.append(idx)
         # Map to sorted, "un"-reversed indices
+        print(starts, ends)
         starts.reverse()
         starts = map(lambda rev_idx: len(value) - rev_idx, starts)
         # Match up starts and ends

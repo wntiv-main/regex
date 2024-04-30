@@ -13,7 +13,7 @@ def main():
     # r"^(?P<user>(?:\w|\.|\+|-)+)@(?P<domain>(?:\w+\.)+\w+)$"
     # rx = RegexBuilder(
     #     r"(?:def|function|(?P<rtype>\w+))\s*(?P<fname>\w+)\s*" \
-    #     r"\((?:(?P<argtype>\w+)\s*(?P<argname>\w+))*\)\s*" \
+    #     r"\((?:(?P<argtype>\w+)\s*(?P<argname>\w+))*\)\s*" \sillly
     #     r"(?:=>\s*(?P<rtype>\w+))?").build()
     mfv = MultiFigureViewer()
 
@@ -32,7 +32,9 @@ def main():
         rx = Regex(r"\w+(?:\.\w+)*@\w+(?:\.\w+)+")
         print(rx)
         while (i := input("emailish??: ")):
-            print(rx.test(i))
+            matches = rx.match(i)
+            for x in matches:
+                print(x)
         mfv.add(DebugGraphViewer(rx.edge_map,
                                  rx.start, rx.end).render())
     except Exception:
