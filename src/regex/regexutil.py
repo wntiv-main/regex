@@ -125,7 +125,7 @@ class SignedSet(Generic[T]):
         ...
 
     # pylint: disable-next=no-self-argument
-    def union(*sets):  # type: ignore
+    def union(*sets: 'SignedSet[T]') -> 'SignedSet[T]':
         """
         Finds the union of the given sets, the set containing all of the
         elements of all the given sets

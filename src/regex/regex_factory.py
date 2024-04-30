@@ -377,7 +377,6 @@ class _RegexFactory:
         Returns:
             The final Regex produced
         """
-        print(f"Opened {_nested!r}")
         while self._cur < len(self.pattern):
             if self.parse_char(self._consume_char(), _nested):
                 break
@@ -394,8 +393,6 @@ class _RegexFactory:
                                MatchConditions.consume_any)
             _OptimiseRegex(self.regex)
             self.regex.base = original
-        self.regex._debug(f"Closed {_nested!r} at {self._cur}")
-        print(f"Closed {_nested!r} at {self._cur}")
         return self.regex
 
     def parse_escaped(self, char: str) -> None:

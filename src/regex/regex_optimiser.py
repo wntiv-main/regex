@@ -235,11 +235,15 @@ class _OptimiseRegex(_MovingIndexHandler):
         todo: set[State] = {state}
         visited: set[State] = (set() if ignore_paths_through is None
                                else ignore_paths_through)
+        first: bool = True
         while todo:
             s = todo.pop()
             if s == self.regex.start:
                 break
-            if s in visited:
+            if first:
+                first = False
+            # Must check at least first state
+            elif s in visited:
                 continue
             visited.add(s)
             todo |= set(np.argwhere(
@@ -354,7 +358,7 @@ class _OptimiseRegex(_MovingIndexHandler):
             # Iterate states inner loop
             for j in self.iterate():
                 # Minimise twice for good measure???
-                # (if it doesnt work i usually just copy/paste these 
+                # (if it doesnt work i usually just copy/paste these
                 #  lines and hope for the best ;) lol)
                 self.minimise(i, j)
                 if j.removed():
@@ -582,6 +586,25 @@ class _OptimiseRegex(_MovingIndexHandler):
             intersect = ConsumeAny(intersection)
         for out in out1, out2:
             other = out.value() ^ out1.value() ^ out2.value()
+            # Special end state edge-case hope this works PLEASE
+            if out.value() == self.regex.end:
+                # Checks
+                # i give up please stop asking me what this code does
+                # how tf am i meant to know
+                # it stops the forever loop bug thats all i know
+                all_edges: Iterable[set[ParserPredicate]]\
+                    = self.regex.edge_map[out.value(), :]
+                end_out_coverage: SignedSet[str] = SignedSet.union(
+                    *(x.coverage()
+                      for edges in all_edges
+                      for x in edges
+                      if x != MatchConditions.epsilon_transition))
+                if not end_out_coverage.negate():
+                    self.regex.connect(state.value(),
+                                    out.value(), intersect)
+                    self.regex._debug(f"endmrg {state} -> {out} <& "
+                                      f"{other}")
+                    return
             if out.value() == self.regex.end and False: # TODO: ??
                 #  Connecting to end is special-case
                 # This is cursed just leave it be ;)
@@ -611,9 +634,10 @@ class _OptimiseRegex(_MovingIndexHandler):
                 return
             if (not self.regex.edge_map[state.value(), out.value()]
                 and (self._get_unreachable_at(
-                        state.value(),
-                        ignore_paths_through={state.value()})
-                     or state.value() == self.regex.start)):
+                        out.value(),
+                        ignore_paths_through={out.value()})
+                    #  or state.value() == self.regex.start # ???
+            )):
                 # One side covered by intersection
                 # other = out.value() ^ out1.value() ^ out2.value()
                 self.regex.connect(state.value(),
