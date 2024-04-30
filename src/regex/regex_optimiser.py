@@ -228,10 +228,24 @@ class _OptimiseRegex(_MovingIndexHandler):
         self.compositions = {}
         self.optimise()
 
-    def _get_unreachable_at( # TODO: doc
+    def _get_unreachable_at(
             self, state: State,
             *, ignore_paths_through: set[State] | None
                                       = None) -> set[State]:
+        """
+        Determines if the given state is reachable from the start state,
+        without passing through any of the given states
+
+        Arguments:
+            state -- The state to check
+
+        Keyword Arguments:
+            ignore_paths_through -- States to ignore any paths through
+                (default: {None})
+
+        Returns:
+            A set of the unreachable states, empty if there are none
+        """
         todo: set[State] = {state}
         visited: set[State] = (set() if ignore_paths_through is None
                                else ignore_paths_through)
@@ -253,6 +267,19 @@ class _OptimiseRegex(_MovingIndexHandler):
         return set()
 
     def _remove_group_if_unreachable(self, start: State) -> bool:
+        """
+        Removes a given state if it deemed to be unreachable, other than
+        through any loops or other weird self-referencial arrangements,
+        by simply checking if a path can be traced back to the start
+        state
+
+        Arguments:
+            start -- The state to check unreachability at (and remove,
+                along with any unreachable peers)
+
+        Returns:
+            Whether the state was removed
+        """
         states = self._get_unreachable_at(start)
         # Iterate in reverse to avoid shifting indices
         states = sorted(states, reverse=True)
@@ -345,6 +372,11 @@ class _OptimiseRegex(_MovingIndexHandler):
         Iterate the entire multi-digraph, performing optimisations where
         applicable
         """
+        # Ive decided that if you want a more detailed explenation of
+        # What is happening here, you can read all of the DFA-related
+        # wikipedia articles - they cover all the concepts involved here
+        # including minification, epsilon closure, and powerset
+        # construction.
         # Use task queue to allow reiteration if a state is "dirtied"
         while self.todo:
             i = self.todo.pop()
@@ -443,21 +475,9 @@ class _OptimiseRegex(_MovingIndexHandler):
             start.reset_iteration()
         else:
             # Merge outputs in the hope that these states can be merged
-            # pass
             if self.regex._merge_outputs(start.value(), end.value()):
                 self.todo.add(self.index(start))
             self.regex._debug(f"mrgd out {start} <- {end}")
-        # self.regex.edge_map[start, end].remove(
-        #     MatchConditions.epsilon_transition)
-        # self.regex._merge_inputs(end, start)
-        # for state in self.regex.edge_map[:, start].nonzero()[0]:
-        #     self.todo.add(state[()])
-        # self.todo.add(end)
-        # if self.regex._remove_if_unreachable(start):
-        #     self.shift_todo(start)
-        #     self.regex._debug(f"e-closed inputs {end} <- {start}")
-        #     return _ActionType.DELETED_START
-        # self.regex._debug(f"e-closed inputs {end} <- {start}")
 
     def minimise(self, s1: _MovingIndex, s2: _MovingIndex) -> None:
         """
@@ -536,7 +556,11 @@ class _OptimiseRegex(_MovingIndexHandler):
             out1: _MovingIndex, out2: _MovingIndex) -> None:
         """
         Resolve any non-deterministic junctions from the given start
-        state to the two given output states
+        state to the two given output states, in effect performing
+        powerset construction, after repeated application over the graph
+        (see: https://en.wikipedia.org/wiki/Powerset_construction). Note
+        that here this is implemented by instead doing repeated
+        "product"-set construction, with the same result
 
         Arguments:
             state -- The start state
@@ -545,12 +569,6 @@ class _OptimiseRegex(_MovingIndexHandler):
         # Check if sets have any overlap
         set1 = self.regex.edge_map[state.value(), out1.value()]
         set2 = self.regex.edge_map[state.value(), out2.value()]
-        # if MatchConditions.epsilon_transition in (row_set | column_set):
-        #     if (out2.value() != self.regex.end
-        #             and out1.value() != self.regex.end):
-        #         # Unless e-move to end, retry
-        #         self.todo.add(self.index(state))
-        #         return
         coverage1 = SignedSet.union(
             *(x.coverage() for x in set1
               if x != MatchConditions.epsilon_transition))
@@ -612,33 +630,6 @@ class _OptimiseRegex(_MovingIndexHandler):
                     self.regex._debug(f"endmrg {state} -> {out} <& "
                                       f"{other}")
                     return
-            if out.value() == self.regex.end and False: # TODO: ??
-                #  Connecting to end is special-case
-                # This is cursed just leave it be ;)
-                outs = self.regex.edge_map[out.value(), other].copy()
-                self.regex._merge_outputs(out.value(), other)
-                self.regex._debug(f"endmrg {state} -> {out} <& {other}")
-                for out_state in self.iterate():
-                    if out_state.value() == out.value():
-                        continue
-                    if not self.regex.edge_map[
-                            other, out_state.value()]:
-                        continue  # Fast path
-                    for out_end_state in self.iterate():
-                        if out_end_state.value() == out.value():
-                            continue # no self-loops for now
-                        if not self.regex.edge_map[
-                                out.value(), out_end_state.value()]:
-                            continue # Fast path
-                        if out_state.value() == out_end_state.value():
-                            continue # Same `to` state
-                        self.powerset_construction(
-                            out, out_state, out_end_state)
-                self.regex.edge_map[out.value(), other] = outs
-                self.regex.connect(state.value(),
-                                   out.value(), intersect)
-                self.regex._debug(f"fndmrg {state} -> {out} <& {other}")
-                return
             if (not self.regex.edge_map[state.value(), out.value()]
                 and (self._get_unreachable_at(
                         out.value(),
@@ -646,7 +637,6 @@ class _OptimiseRegex(_MovingIndexHandler):
                     #  or state.value() == self.regex.start # ???
             )):
                 # One side covered by intersection
-                # other = out.value() ^ out1.value() ^ out2.value()
                 self.regex.connect(state.value(),
                                    out.value(), intersect)
                 self.regex._merge_outputs(out.value(), other)
@@ -664,40 +654,11 @@ class _OptimiseRegex(_MovingIndexHandler):
                               self.index(out1), self.index(out2))
         self.todo.add(self.index(new_state))
         self.regex.connect(state.value(), new_state.value(), intersect)
-        # Connect outputs
-        # if (not self.regex.edge_map[state.value(), out1.value()]
-        #         and not self.regex.edge_map[state.value(), out2.value()]):
-        #     # Loop, use e-moves to connect
-        #     self.regex.connect(new_state.value(), out1.value(),
-        #                        MatchConditions.epsilon_transition)
-        #     self.regex.connect(new_state.value(), out2.value(),
-        #                        MatchConditions.epsilon_transition)
-        #     self.regex._debug(f"power {state} -> {out1} & {out2} -> "
-        #                       f"{new_state}")
-        #     loops1: set[ParserPredicate] = self.regex.edge_map[
-        #         out1.value(), out1.value()]
-        #     loops2: set[ParserPredicate] = self.regex.edge_map[
-        #         out2.value(), out2.value()]
-        #     for edge in loops1.copy():
-        #         if edge.kind_of_in(loops2) is not None:
-        #             # Shared loops
-        #             self.regex.connect(new_state.value(), new_state.value(),
-        #                                edge.copy())
-        # if self.regex.edge_map[out2.value(), state.value()]:
-        #     out1, out2 = out2, out1
-        # if self.regex._remove_if_unreachable(out1.value()):
-        #     self.remove(out1)
-        # else:
-        #     self.epsilon_closure(new_state, out1)
-        # if self.regex._remove_if_unreachable(out2.value()):
-        #     self.remove(out2)
-        # elif not new_state.removed():
-        #     self.epsilon_closure(new_state, out2)
-        # return
+        # This comment outdated, probably ignore
         # Otherwise, merge
         self.regex._merge_outputs(new_state.value(), out1.value())
         self.regex._merge_outputs(new_state.value(), out2.value())
-        # for composite in self.get_compositions(out1)
+        # Some magic with self-loops im not entirely sure why
         loops1: set[ParserPredicate] = self.regex.edge_map[
             new_state.value(), out1.value()]
         loops2: set[ParserPredicate] = self.regex.edge_map[
