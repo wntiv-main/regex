@@ -16,7 +16,7 @@ def test_digits(start: NodeMatcher):
     start.has_any('0123456789', RegexState.END)
 
 
-TestRegexMatches(r"\d")                 \
+TestRegexMatches(r"\A\d\Z")             \
     .assert_matches('0', '3', '7', '9') \
     .assert_doesnt_match('a', 'five', 'hello', '?')
 
@@ -30,7 +30,7 @@ def test_alphanum(start: NodeMatcher):
                   RegexState.END)
 
 
-TestRegexMatches(r"\w")                                \
+TestRegexMatches(r"\A\w\Z")                            \
     .assert_matches('0', '7', '_', 'a', 'E', 'j', 'X') \
     .assert_doesnt_match('$', '+', '&', '?', '-')
 
@@ -46,9 +46,9 @@ def test_string_reverse(start: NodeMatcher):
     start.has_literal_chain('olleh', RegexState.END)
 
 
-TestRegexMatches(r"hello")                 \
-    .assert_matches('hello', 'helloijwlk') \
-    .assert_doesnt_match('he', 'dsnjkdf')
+TestRegexMatches(r"\Ahello\Z") \
+    .assert_matches('hello')   \
+    .assert_doesnt_match('he', 'dsnjkdf', 'helloijwlk')
 
 TestRegexMatches(r"hello", reverse=True)    \
     .assert_matches('olleh', 'ollehjkdsfk') \

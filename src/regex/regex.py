@@ -3,8 +3,10 @@
 __author__ = "Callum Hynes"
 __all__ = ["Regex"]
 
-from typing import (Any, Callable, Iterable, Mapping, Self, Sequence,
+from typing import (Any, Callable, Iterable, Mapping, Optional, Self, Sequence,
                     overload)
+
+import imp
 try:
     import numpy as np
 except ImportError as e:
@@ -44,7 +46,11 @@ class Regex:
         if __debug__:
             Regex._debug_function(self, msg)
 
-    base: 'Regex | None' = None
+    _base: 'Regex | None' = None
+    """The Regex that this was based off of"""
+
+    _reverse: 'Regex | None' = None
+    """The reverse of this Regex"""
 
     # pylint: disable-next=no-member, unsubscriptable-object
     edge_map: np.ndarray[Any, np.dtypes.ObjectDType]
@@ -515,18 +521,42 @@ class Regex:
         Returns:
             A new Regex which matches the reverse strings.
         """
-        if self.base is not None:
-            # Avoiding cyclic dependancy due to type annotations
-            # pylint: disable-next=import-outside-toplevel
-            from .regex_optimiser import _OptimiseRegex
-            result = self.base.reverse()
-            _OptimiseRegex(self.base)
+        if self._reverse is None:
+            self._prepare_full_reverse()
+        assert self._reverse is not None
+        return self._reverse.copy()
+    __neg__ = reverse
+
+    def _basic_reverse(self) -> 'Regex':
+        """
+        Performs the basic operations needed for reversal
+
+        Returns:
+            A new, reversed Regex
+        """
         result = self.copy()
         result.edge_map = result.edge_map.transpose()
         result.start = self.end
         result.end = self.start
         return result
-    __neg__ = reverse
+
+    def _prepare_full_reverse(self) -> None:
+        # Need to access other Regex instances
+        # pylint: disable=protected-access
+        # Import here to avoid cyclic dependency due to type-annotating
+        # in regex_optimiser.py
+        # pylint: disable-next=import-outside-toplevel
+        from .regex_optimiser import _OptimiseRegex
+        assert self._base is not None
+        reverse = self._base._basic_reverse()
+        _OptimiseRegex(reverse)
+        reverse._base = reverse.copy()
+        reverse.connect(reverse.start,
+                        reverse.start,
+                        MatchConditions.consume_any)
+        _OptimiseRegex(reverse)
+        reverse._reverse = self
+        self._reverse = reverse
 
     def __bool__(self) -> bool:
         """
@@ -562,6 +592,75 @@ class Regex:
                 return False
         return True
     test = is_in
+
+    def _match_index(self, value: str, *, start: int = 0) -> int:
+        """
+        Finds the index where this regex finds a match within the string
+
+        Arguments:
+            value -- The string to search
+
+        Keyword Arguments:
+            start -- The index of the string to start at (default: {0})
+
+        Returns:
+            The index of the last char within the found substring (-1
+            for no match)
+        """
+        # Note implementation is very similar to is_in, but is slightly
+        # more featured, because it not only needs to find the match,
+        # but also the last index of the match. As such it does not end
+        # right away when it hits the end state, but instead searches to
+        # see if it could find any more
+        ctx = MatchConditions(value)
+        # pylint: disable-next=protected-access
+        ctx._cursor = start
+        state = self.start
+        end_idx: int = -1
+        while True:
+            if state == self.start:
+                # "temp" workaround for not missing entire match
+                if end_idx > 0:
+                    return end_idx
+            if state == self.end:
+                # pylint: disable-next=protected-access
+                end_idx = ctx._cursor
+            exit_state: Optional[State] = None
+            for i in range(self.size):
+                for edge in self.edge_map[state, i]:
+                    edge: ParserPredicate
+                    if edge == MatchConditions.epsilon_transition:
+                        # e-moves are low-priority, save for later
+                        exit_state = i
+                    elif edge.evaluate(ctx):
+                        state = i
+                        break  # outer loop
+                else: # cursedness to break to outer loop
+                    continue
+                break
+            else:
+                if exit_state is not None:
+                    state = exit_state
+                    continue # outer loop
+                # No match, return last found end index
+                return end_idx
+
+    def match(self, value: str) -> Iterable[slice[int]]:
+        self._prepare_full_reverse()
+        starts, ends = [], []
+        idx = 0
+        while (idx := self._match_index(value, start=idx)) >= 0:
+            ends.append(idx)
+        self._prepare_full_reverse()
+        assert self._reverse is not None
+        str_reverse = value[::-1] # cursed
+        idx = 0
+        # Dont use .reverse() to avoid unnecesary copy
+        # pylint: disable-next=protected-access
+        while (idx := self._reverse._match_index(str_reverse,
+                                                 start=idx)) >= 0:
+            starts.append(idx)
+        # TODO:
 
     def optional(self) -> Self:
         """

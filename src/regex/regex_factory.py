@@ -387,12 +387,11 @@ class _RegexFactory:
             self.regex._debug("start")
             # Loop until can match
             _OptimiseRegex(self.regex)
-            original = self.regex.copy()
+            self.regex._base = self.regex.copy()
             self.regex.connect(self.regex.start,
                                self.regex.start,
                                MatchConditions.consume_any)
             _OptimiseRegex(self.regex)
-            self.regex.base = original
         return self.regex
 
     def parse_escaped(self, char: str) -> None:
