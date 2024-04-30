@@ -394,6 +394,7 @@ class _RegexFactory:
                                MatchConditions.consume_any)
             _OptimiseRegex(self.regex)
             self.regex.base = original
+        self.regex._debug(f"Closed {_nested!r} at {self._cur}")
         print(f"Closed {_nested!r} at {self._cur}")
         return self.regex
 
@@ -586,6 +587,7 @@ class _RegexFactory:
                     f"Unopened '{char}'",
                     self.pattern, self._cur - 1)
             case '|':  # or
+                self._require_previous()
                 start_cur = self._cur - 1
                 # Parse RHS of expression
                 rh_builder = _RegexFactory(
@@ -594,13 +596,16 @@ class _RegexFactory:
                     _cid=self._capture_auto_id,
                     _open_bracket_pos=self._cursor_started)
                 # pylint: disable=protected-access
+                rh_group = rh_builder.build(
+                    _nested=_NestedType.NESTED_ALTERNATIVE)
                 self._cur = rh_builder._cur
                 self._capture_auto_id = rh_builder._capture_auto_id
-                rh_group = rh_builder.build(_nested=_NestedType.NESTED_ALTERNATIVE)
                 self.connect_last()
-                if not self.regex or not rh_group:
+                # Make sure to not double-add
+                self._last_token = None
+                if not rh_group:
                     raise PatternParseError(
-                        "'|' must have atleast one token on each side",
+                        "'|' must be succeeded by atleast one token",
                         self.pattern, start_cur)
                 self.regex |= rh_group
             # All other chars:

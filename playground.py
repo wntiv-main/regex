@@ -29,7 +29,7 @@ def main():
     Regex._debug_function = debug
     try:
         # r"\w+(?:\.\w+)*@\w+(?:\.\w+)+"
-        rx = Regex(r"(a|b)+")
+        rx = Regex(r"(a|b|c)+")
         print(rx)
         mfv.add(DebugGraphViewer(rx.edge_map,
                                  rx.start, rx.end).render())
