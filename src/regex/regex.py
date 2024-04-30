@@ -6,7 +6,6 @@ __all__ = ["Regex"]
 from typing import (Any, Callable, Iterable, Mapping, Optional, Self, Sequence,
                     overload)
 
-import imp
 try:
     import numpy as np
 except ImportError as e:
@@ -645,7 +644,7 @@ class Regex:
                 # No match, return last found end index
                 return end_idx
 
-    def match(self, value: str) -> Iterable[slice[int]]:
+    def match(self, value: str) -> Iterable[slice]:
         self._prepare_full_reverse()
         starts, ends = [], []
         idx = 0
@@ -660,7 +659,11 @@ class Regex:
         while (idx := self._reverse._match_index(str_reverse,
                                                  start=idx)) >= 0:
             starts.append(idx)
-        # TODO:
+        # Map to sorted, "un"-reversed indices
+        starts.reverse()
+        starts = map(lambda rev_idx: len(value) - rev_idx, starts)
+        # Match up starts and ends
+        return map(lambda tup: slice(*tup), zip(starts, ends))
 
     def optional(self) -> Self:
         """
