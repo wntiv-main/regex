@@ -377,6 +377,7 @@ class _RegexFactory:
         Returns:
             The final Regex produced
         """
+        print(f"Opened {_nested!r}")
         while self._cur < len(self.pattern):
             if self.parse_char(self._consume_char(), _nested):
                 break
@@ -393,6 +394,7 @@ class _RegexFactory:
                                MatchConditions.consume_any)
             _OptimiseRegex(self.regex)
             self.regex.base = original
+        print(f"Closed {_nested!r} at {self._cur}")
         return self.regex
 
     def parse_escaped(self, char: str) -> None:
@@ -594,16 +596,13 @@ class _RegexFactory:
                 # pylint: disable=protected-access
                 self._cur = rh_builder._cur
                 self._capture_auto_id = rh_builder._capture_auto_id
-                nest_type = (_NestedType.NESTED_ALTERNATIVE
-                             if nested == _NestedType.TOP else nested)
-                rh_group = rh_builder.build(_nested=nest_type)
+                rh_group = rh_builder.build(_nested=_NestedType.NESTED_ALTERNATIVE)
                 self.connect_last()
                 if not self.regex or not rh_group:
                     raise PatternParseError(
                         "'|' must have atleast one token on each side",
                         self.pattern, start_cur)
                 self.regex |= rh_group
-                return True
             # All other chars:
             case ch:
                 self.append(ConsumeString(ch))
