@@ -29,7 +29,7 @@ def main():
     Regex._debug_function = debug
     try:
         # r"\w+(?:\.\w+)*@\w+(?:\.\w+)+"
-        rx = Regex(r"\A(a|b|c)*")
+        rx = Regex(r"\Ahello|\Agoodbye")
         assert rx._base is not None
         mfv.add(DebugGraphViewer(rx.edge_map,
                                  rx.start, rx.end).render())

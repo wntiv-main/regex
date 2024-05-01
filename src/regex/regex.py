@@ -649,6 +649,7 @@ class Regex:
                             MatchConditions.epsilon_transition)
         if unanchored_start is not None:
             self._remove_if_unreachable(unanchored_start)
+        self._debug("resolved anchors")
         _OptimiseRegex(self)
         # Clear _reverse to ensure it is up-to-date
         self._reverse = None
