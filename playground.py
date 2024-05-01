@@ -26,17 +26,21 @@ def main():
         mfv.add(fig)
         print(f"{msg}:\n{rx}")
         print(f"dupls: {rx._find_double_refs()}")
-    Regex._debug_function = debug
     try:
         # r"\w+(?:\.\w+)*@\w+(?:\.\w+)+"
         rx = Regex(r"\w+(?:\.\w+)*@\w+(?:\.\w+)+")
-        print(rx)
+        print(rx._base)
+        assert rx._base is not None
+        mfv.add(DebugGraphViewer(rx._base.edge_map,
+                                 rx._base.start, rx._base.end).render())
+        Regex._debug_function = debug
+        rxr = rx.reverse()
         while (i := input("emailish??: ")):
             matches = rx.match(i)
             for x in matches:
                 print(x)
-        mfv.add(DebugGraphViewer(rx.edge_map,
-                                 rx.start, rx.end).render())
+        mfv.add(DebugGraphViewer(rxr.edge_map,
+                                 rxr.start, rxr.end).render())
     except Exception:
         # Print exception, still show viewer
         traceback.print_exc()

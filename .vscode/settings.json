@@ -13,5 +13,6 @@
 	},
 	"pylint.importStrategy": "fromEnvironment",
 	"python.analysis.extraPaths": ["./src"],
-	"editor.formatOnSave": false
+	"editor.formatOnSave": false,
+	"autoDocstring.docstringFormat": "pep257"
 }

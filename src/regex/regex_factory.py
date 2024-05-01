@@ -390,7 +390,7 @@ class _RegexFactory:
             self.regex._base = self.regex.copy()
             self.regex.connect(self.regex.start,
                                self.regex.start,
-                               MatchConditions.consume_any)
+                               MatchConditions.consume_any.copy())
             _OptimiseRegex(self.regex)
         return self.regex
 

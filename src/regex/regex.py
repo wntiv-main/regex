@@ -15,6 +15,19 @@ except ImportError as e:
 from .regexutil import MatchConditions, ParserPredicate, State
 
 
+def _set_deep_copy(value: set) -> set:
+    """
+    Deep copy a set with .copy()able elements
+
+    Arguments:
+        value -- The set to copy
+
+    Returns:
+        The new set
+    """
+    return {i.copy() for i in value}
+
+
 class Regex:
     """
     Represents a regular expression, using a deterministic finite
@@ -126,7 +139,7 @@ class Regex:
             case (Regex() as x,), {}:
                 result = super().__new__(cls)
                 # Deep copy sets within table
-                result.edge_map = np.vectorize(set.copy)(x.edge_map)
+                result.edge_map = np.vectorize(_set_deep_copy)(x.edge_map)
                 result.start = x.start
                 result.end = x.end
                 return result
@@ -552,7 +565,7 @@ class Regex:
         reverse._base = reverse.copy()
         reverse.connect(reverse.start,
                         reverse.start,
-                        MatchConditions.consume_any)
+                        MatchConditions.consume_any.copy())
         _OptimiseRegex(reverse)
         reverse._reverse = self
         self._reverse = reverse
@@ -644,7 +657,7 @@ class Regex:
                 # No match, return last found end index
                 return end_idx
 
-    def match(self, value: str) -> Iterable[slice]:
+    def match(self, value: str) -> Iterable[tuple[slice, str]]:
         self._prepare_full_reverse()
         starts, ends = [], []
         idx = 0
@@ -664,7 +677,8 @@ class Regex:
         starts.reverse()
         starts = map(lambda rev_idx: len(value) - rev_idx, starts)
         # Match up starts and ends
-        return map(lambda tup: slice(*tup), zip(starts, ends))
+        return map(lambda tup: (slice(*tup), value[slice(*tup)]),
+                   zip(starts, ends))
 
     def optional(self) -> Self:
         """
