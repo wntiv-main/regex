@@ -24,20 +24,20 @@ def main():
         fig.suptitle(str(rx), fontsize=8)
         fig.canvas.manager.set_window_title(msg)  # type: ignore
         mfv.add(fig)
-        # print(f"{msg}:\n{rx}")
+        print(f"{msg}:\n{rx}")
         # print(f"dupls: {rx._find_double_refs()}")
     Regex._debug_function = debug
     try:
         # r"\w+(?:\.\w+)*@\w+(?:\.\w+)+"
-        rx = Regex(r"\w+(?:\.\w+)*@\w+(?:\.\w+)+")
+        rx = Regex(r"\Aa{3,5}")
         assert rx._base is not None
         mfv.add(DebugGraphViewer(rx._base.edge_map,
                                  rx._base.start, rx._base.end).render())
-        rxr = rx.reverse()
-        while (i := input("emailish??: ")):
-            print(rx.replace_in(i, '(%0)'))
-        mfv.add(DebugGraphViewer(rxr.edge_map,
-                                 rxr.start, rxr.end).render())
+        # rxr = rx.reverse()
+        # # while (i := input("emailish??: ")):
+        # #     print(rx.replace_in(i, '(%0)'))
+        # mfv.add(DebugGraphViewer(rxr.edge_map,
+        #                          rxr.start, rxr.end).render())
     except Exception:
         # Print exception, still show viewer
         traceback.print_exc()

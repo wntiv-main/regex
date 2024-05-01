@@ -11,7 +11,7 @@ from .test import TestType
 # pylint: disable=missing-function-docstring
 
 # Digits
-@TestRegexShape(r"\d")
+@TestRegexShape(r"\A\d")
 def test_digits(start: NodeMatcher):
     start.has_any('0123456789', RegexState.END)
 
@@ -22,7 +22,7 @@ TestRegexMatches(r"\A\d\Z")             \
 
 
 # "Word" chars
-@TestRegexShape(r"\w")
+@TestRegexShape(r"\A\w")
 def test_alphanum(start: NodeMatcher):
     # all chars matched by \w
     start.has_any('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
@@ -36,12 +36,12 @@ TestRegexMatches(r"\A\w\Z")                            \
 
 
 # Strings
-@TestRegexShape(r"hello")
+@TestRegexShape(r"\Ahello")
 def test_string(start: NodeMatcher):
     start.has_literal_chain('hello', RegexState.END)
 
 
-@TestRegexShape(r"hello", reverse=True)
+@TestRegexShape(r"hello\Z", reverse=True)
 def test_string_reverse(start: NodeMatcher):
     start.has_literal_chain('olleh', RegexState.END)
 
@@ -50,28 +50,28 @@ TestRegexMatches(r"\Ahello\Z") \
     .assert_matches('hello')   \
     .assert_doesnt_match('he', 'dsnjkdf', 'helloijwlk')
 
-TestRegexMatches(r"hello", reverse=True)    \
-    .assert_matches('olleh', 'ollehjkdsfk') \
-    .assert_doesnt_match('hello', '', 'oll', 'dsnjkdf')
+TestRegexMatches(r"\Ahello\Z", reverse=True) \
+    .assert_matches('olleh')                 \
+    .assert_doesnt_match('hello', '', 'oll', 'dsnjkdf', 'ollehjkdsfk')
 
 
 # Star
-@TestRegexShape(r"a*")
+@TestRegexShape(r"\Aa*")
 def test_star(start: NodeMatcher):
     start.is_also(RegexState.END).has_literal('a', RegexState.SELF)
 
 
-TestRegexMatches(r"a*\Z")                     \
+TestRegexMatches(r"\Aa*\Z")                   \
     .assert_matches('', 'a', 'aaa', 'aaaaaa') \
     .assert_doesnt_match('njds', 'hello')
 
-TestRegexMatches(r"a*", TestType.BOUNDARY) \
+TestRegexMatches(r"\Aa*\Z", TestType.BOUNDARY) \
     .assert_matches('')
 
 TestParseError(r'*abc')
 
 
-@TestRegexShape(r"(a?b?c?)*",
+@TestRegexShape(r"\A(a?b?c?)*",
                 expecting="all epsilon-moves to be removed")
 def test_epsilon_closure_and_minification(start: NodeMatcher):
     start.is_also(RegexState.END)          \
@@ -79,19 +79,27 @@ def test_epsilon_closure_and_minification(start: NodeMatcher):
         .has_literal('b', RegexState.SELF) \
         .has_literal('c', RegexState.SELF)
 
+@TestRegexShape(r"\A(a|b|c)*",
+                expecting="all epsilon-moves to be removed")
+def test_epsilon_closure_and_minification_with_or(start: NodeMatcher):
+    start.is_also(RegexState.END)          \
+        .has_literal('a', RegexState.SELF) \
+        .has_literal('b', RegexState.SELF) \
+        .has_literal('c', RegexState.SELF)
+
 
 # Plus
-@TestRegexShape(r"a+")
+@TestRegexShape(r"\Aa+")
 def test_plus(start: NodeMatcher):
     end = start.has_literal('a', RegexState.END)
     end.has_literal('a', RegexState.SELF)
 
 
-TestRegexMatches(r"a+")                                   \
-    .assert_matches('a', 'aaa', 'aaaaaa', 'aaaaaabdsjmn') \
-    .assert_doesnt_match('', 'njds', 'hello')
+TestRegexMatches(r"\Aa+\Z")               \
+    .assert_matches('a', 'aaa', 'aaaaaa') \
+    .assert_doesnt_match('', 'njds', 'hello', 'aaaaaabdsjmn')
 
-TestRegexMatches(r"a+", TestType.BOUNDARY) \
+TestRegexMatches(r"\Aa+", TestType.BOUNDARY) \
     .assert_matches('a')                   \
     .assert_doesnt_match('')
 
@@ -100,13 +108,13 @@ TestParseError(r'+abc')
 # Optional
 
 
-@TestRegexShape(r"a?")
+@TestRegexShape(r"\Aa?")
 def test_optional(start: NodeMatcher):
     start.has_literal('a', RegexState.END)
     start.has(MatchConditions.epsilon_transition, RegexState.END)
 
 
-TestRegexMatches(r"a?\Z")    \
+TestRegexMatches(r"\Aa?\Z")  \
     .assert_matches('', 'a') \
     .assert_doesnt_match('aaa', 'aaaaaaa')
 
@@ -114,30 +122,29 @@ TestParseError(r'?abc')
 
 
 # OR
-@TestRegexShape(r"a|b")
+@TestRegexShape(r"\A(?:a|b)")
 def test_or(start: NodeMatcher):
-    start.has_literal('a', RegexState.END)
-    start.has_literal('b', RegexState.END)
+    start.has_any('ab', RegexState.END)
 
 
-TestRegexMatches(r"a|b")      \
-    .assert_matches('a', 'b') \
+TestRegexMatches(r"\A(?:a|b)") \
+    .assert_matches('a', 'b')  \
     .assert_doesnt_match('c', 'd')
 
 
-@TestRegexShape(r"hello|goodbye")
+@TestRegexShape(r"\Ahello|\Agoodbye")
 def test_longer_or(start: NodeMatcher):
     start.has_literal_chain('hello', RegexState.END)
     start.has_literal_chain('goodbye', RegexState.END)
 
 
-@TestRegexShape(r"hello|goodbye", reverse=True)
+@TestRegexShape(r"hello\Z|goodbye\Z", reverse=True)
 def test_reverse_or(start: NodeMatcher):
     start.has_literal_chain('olleh', RegexState.END)
     start.has_literal_chain('eybdoog', RegexState.END)
 
 
-@TestRegexShape(r"hello|hi",
+@TestRegexShape(r"\A(?:hello|hi)",
                 expecting="two h-moves to be merged into one")
 def test_powerset_construction(start: NodeMatcher):
     next_state = start.has_literal('h')
@@ -145,7 +152,7 @@ def test_powerset_construction(start: NodeMatcher):
     next_state.has_literal('i', RegexState.END)
 
 
-@TestRegexShape(r"\da|[13579a-e]b",
+@TestRegexShape(r"\A(?:\da|[13579a-e]b)",
                 expecting="the edges to be merged into an equivilent"
                           "edge that covers both of them")
 def test_complex_powerset_construction(start: NodeMatcher):
@@ -153,17 +160,16 @@ def test_complex_powerset_construction(start: NodeMatcher):
     intersect = start.has_any('13579')
     right = start.has_any('abcde')
     left.has_literal('a', RegexState.END)
-    intersect.has_literal('a', RegexState.END)
-    intersect.has_literal('b', RegexState.END)
+    intersect.has_any('ab', RegexState.END)
     right.has_literal('b', RegexState.END)
 
 
-TestRegexMatches(r"hello\Z|goodbye\Z")  \
+TestRegexMatches(r"\Ahello\Z|\Agoodbye\Z")  \
     .assert_matches('hello', 'goodbye') \
     .assert_doesnt_match('helloodbye', 'he', 'hellodbye')
 
 
-TestRegexMatches(r"hello|goodbye", reverse=True) \
+TestRegexMatches(r"\A(hello|goodbye)\Z", reverse=True) \
     .assert_matches('olleh', 'eybdoog')          \
     .assert_doesnt_match('hello', 'goodbye', 'eybdo', '', 'og')
 
@@ -172,12 +178,12 @@ TestParseError(r'abc|')
 
 
 # Char classes
-@TestRegexShape(r"[ab]")
+@TestRegexShape(r"\A[ab]")
 def test_class_specifier(start: NodeMatcher):
     start.has_any('ab', RegexState.END)
 
 
-TestRegexMatches(r"[ab]")     \
+TestRegexMatches(r"[ab]")   \
     .assert_matches('a', 'b') \
     .assert_doesnt_match('c', 'd')
 
@@ -186,7 +192,7 @@ TestParseError(r'[abc')
 TestParseError(r'hello]')
 
 
-@TestRegexShape(r"[^ab]")
+@TestRegexShape(r"\A[^ab]")
 def test_inverted_class_specifier(start: NodeMatcher):
     start.has_any_except('ab', RegexState.END)
 
@@ -196,7 +202,7 @@ TestRegexMatches(r"[^ab]")    \
     .assert_doesnt_match('a', 'b')
 
 
-@TestRegexShape(r"[c-g]")
+@TestRegexShape(r"\A[c-g]")
 def test_class_specifier_range(start: NodeMatcher):
     start.has_any('cdefg', RegexState.END)
 
@@ -220,7 +226,7 @@ TestParseError(r'a{hello}')
 TestParseError(r'a{1,2,3}')
 
 
-@TestRegexShape(r"a{3}")
+@TestRegexShape(r"\Aa{3}")
 def test_quantifier(start: NodeMatcher):
     start.has_literal_chain('aaa', RegexState.END)
 
@@ -229,33 +235,33 @@ TestRegexMatches(r"a{3}")  \
     .assert_matches('aaa') \
     .assert_doesnt_match('bbb', 'ccccc', 'a')
 
-TestRegexMatches(r"a{3}\Z", TestType.BOUNDARY) \
-    .assert_matches('aaa')                     \
+TestRegexMatches(r"\Aa{3}\Z", TestType.BOUNDARY) \
+    .assert_matches('aaa')                       \
     .assert_doesnt_match('aa', 'aaaa')
 
 TestParseError(r'a{0}')
 TestNoParseError(r'a{1}')
 
 
-@TestRegexShape(r"a{3,}")
+@TestRegexShape(r"\Aa{3,}")
 def test_min_quantifier(start: NodeMatcher):
     start.has_literal_chain('aaa', RegexState.END)\
         .has_literal('a', RegexState.SELF)
 
 
-TestRegexMatches(r"a{3,}")                     \
+TestRegexMatches(r"\Aa{3,}")                   \
     .assert_matches('aaa', 'aaaa', 'aaaaaaaa') \
     .assert_doesnt_match('bbb', 'ccccc', 'a')
 
-TestRegexMatches(r"a{3,}", TestType.BOUNDARY) \
-    .assert_matches('aaa', 'aaaa')            \
+TestRegexMatches(r"\Aa{3,}", TestType.BOUNDARY) \
+    .assert_matches('aaa', 'aaaa')              \
     .assert_doesnt_match('aa')
 
 TestParseError(r'a{-1,}')
 TestNoParseError(r'a{0,}')
 
 
-@TestRegexShape(r"a{,3}")
+@TestRegexShape(r"\Aa{,3}")
 def test_max_quantifier(start: NodeMatcher):
     start.has(MatchConditions.epsilon_transition, RegexState.END)
     first = start.has_literal('a')
@@ -265,18 +271,18 @@ def test_max_quantifier(start: NodeMatcher):
     second.has_literal('a', RegexState.END)
 
 
-TestRegexMatches(r"a{,3}\Z")   \
+TestRegexMatches(r"\Aa{,3}\Z") \
     .assert_matches('a', 'aa') \
     .assert_doesnt_match('bbb', 'aaaaaa')
 
-TestRegexMatches(r"a{,3}\Z", TestType.BOUNDARY) \
-    .assert_matches('aaa', 'aa')                \
+TestRegexMatches(r"\Aa{,3}\Z", TestType.BOUNDARY) \
+    .assert_matches('aaa', 'aa')                  \
     .assert_doesnt_match('aaaa')
 
 TestParseError(r'a{,0}')
 
 
-@TestRegexShape(r"a{3,5}")
+@TestRegexShape(r"\Aa{3,5}")
 def test_minmax_quantifier(start: NodeMatcher):
     first = start.has_literal_chain('aaa')  # first 3 compulsary
     first.has(MatchConditions.epsilon_transition, RegexState.END)
@@ -285,12 +291,12 @@ def test_minmax_quantifier(start: NodeMatcher):
     second.has_literal('a', RegexState.END)
 
 
-TestRegexMatches(r"a{3,5}\Z")      \
+TestRegexMatches(r"\Aa{3,5}\Z")    \
     .assert_matches('aaa', 'aaaa') \
     .assert_doesnt_match('bbb', 'aaaaaa', 'aa')
 
-TestRegexMatches(r"a{3,5}\Z", TestType.BOUNDARY) \
-    .assert_matches('aaa', 'aaaaa')              \
+TestRegexMatches(r"\Aa{3,5}\Z", TestType.BOUNDARY) \
+    .assert_matches('aaa', 'aaaaa')                \
     .assert_doesnt_match('aa', 'aaaaaa')
 
 TestParseError(r'a{5,3}')

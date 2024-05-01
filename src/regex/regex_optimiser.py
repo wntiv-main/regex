@@ -144,6 +144,9 @@ class _MovingIndex:
         """
         return str(self._internal_index)
 
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self._internal_index})"
+
 
 class _OptimiseRegex(_MovingIndexHandler):
     """
@@ -568,6 +571,8 @@ class _OptimiseRegex(_MovingIndexHandler):
             state -- The start state
             out1, out2 -- The output states
         """
+        if out1.value() == out2.value():
+            return
         # Check if sets have any overlap
         set1 = self.regex.edge_map[state.value(), out1.value()]
         set2 = self.regex.edge_map[state.value(), out2.value()]
@@ -584,6 +589,11 @@ class _OptimiseRegex(_MovingIndexHandler):
         # Remove intersection from both initial states
         for edges in set1, set2:
             for edge in edges.copy():
+                if ((a := edge.kind_of_in(set1)) is not None
+                        and (b := edge.kind_of_in(set2)) is not None):
+                    set1.remove(a)
+                    set2.remove(b)
+                    continue
                 match edge:
                     case ConsumeAny():
                         edge.match_set -= intersection
@@ -599,11 +609,12 @@ class _OptimiseRegex(_MovingIndexHandler):
         # States were changed, check again
         self.todo.add(self.index(out1))
         self.todo.add(self.index(out2))
-        intersect: ParserPredicate
+        intersects: set[ParserPredicate] = set1 & set2
         if intersection.length() == 1:
-            intersect = ConsumeString(intersection.unwrap_value())
+            intersects.add(
+                ConsumeString(intersection.unwrap_value()))
         else:
-            intersect = ConsumeAny(intersection)
+            intersects.add(ConsumeAny(intersection))
         for out in out1, out2:
             other = out.value() ^ out1.value() ^ out2.value()
             # Special end state edge-case hope this works PLEASE
@@ -627,8 +638,8 @@ class _OptimiseRegex(_MovingIndexHandler):
                 # thinking straight when i wrote this (nor am i now,
                 # probably)
                 if not end_out_coverage.negate():
-                    self.regex.connect(state.value(),
-                                    out.value(), intersect)
+                    self.regex.connect_many(state.value(),
+                                    out.value(), intersects)
                     self.regex._debug(f"endmrg {state} -> {out} <& "
                                       f"{other}")
                     return
@@ -639,8 +650,8 @@ class _OptimiseRegex(_MovingIndexHandler):
                     #  or state.value() == self.regex.start # ???
             )):
                 # One side covered by intersection
-                self.regex.connect(state.value(),
-                                   out.value(), intersect)
+                self.regex.connect_many(state.value(),
+                                   out.value(), intersects)
                 self.regex._merge_outputs(out.value(), other)
                 old_loops = self.regex.edge_map[out.value(), other]
                 loops = self.regex.edge_map[out.value(), out.value()]
@@ -655,7 +666,8 @@ class _OptimiseRegex(_MovingIndexHandler):
         self.add_compositions(new_state,
                               self.index(out1), self.index(out2))
         self.todo.add(self.index(new_state))
-        self.regex.connect(state.value(), new_state.value(), intersect)
+        self.regex.connect_many(state.value(), new_state.value(),
+                                intersects)
         # This comment outdated, probably ignore
         # Otherwise, merge
         self.regex._merge_outputs(new_state.value(), out1.value())

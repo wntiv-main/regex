@@ -13,6 +13,14 @@
 			"console": "integratedTerminal"
 		},
 		{
+			"name": "Python: Run Tests (Headless)",
+			"type": "debugpy",
+			"request": "launch",
+			"module": "tests",
+			"args": ["--full-output", "--headless"],
+			"console": "integratedTerminal"
+		},
+		{
 			"name": "Python: Run Tests (Distribution)",
 			"type": "debugpy",
 			"request": "launch",

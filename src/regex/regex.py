@@ -635,17 +635,19 @@ class Regex:
                      # pylint: disable-next=no-member
                      MatchConditions.consume_any.copy())
         # Handle anchored moves
-        anchored_start: Optional[State] = None
+        unanchored_start: Optional[State] = None
         for state, edges in enumerate(self.edge_map[self.start, :]):
             if not MatchConditions.begin in edges:
                 continue
             edges.remove(MatchConditions.begin)
-            if anchored_start is None:
-                anchored_start = self.add_state()
-                self.connect(anchored_start, self.start,
+            if unanchored_start is None:
+                unanchored_start = self.start
+                self.start = self.add_state()
+                self.connect(self.start, unanchored_start,
                              MatchConditions.epsilon_transition)
-                self.start = anchored_start
-            self._merge_outputs(anchored_start, state)
+            self._merge_outputs(self.start, state)
+        if unanchored_start is not None:
+            self._remove_if_unreachable(unanchored_start)
         _OptimiseRegex(self)
         # Clear _reverse to ensure it is up-to-date
         self._reverse = None
@@ -657,13 +659,7 @@ class Regex:
         reverse = self._base._basic_reverse()
         _OptimiseRegex(reverse)
         reverse._base = reverse.copy()
-        reverse.connect(reverse.start,
-                        reverse.start,
-                        # Pylint doesn't recognise consume_any as a
-                        # ConsumeAny instance
-                        # pylint: disable-next=no-member
-                        MatchConditions.consume_any.copy())
-        _OptimiseRegex(reverse)
+        reverse._prepare_for_use()
         reverse._reverse = self
         self._reverse = reverse
 
