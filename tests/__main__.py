@@ -23,8 +23,8 @@ if "--full-output" in sys.argv:
         # Print header
         print(f"\n{'='*20}\n|{'Full Output':^18}|\n{'='*20}\n")
         print(output)
-failed = sum(tests[ResultType.FAIL] + tests[ResultType.ERROR]
-             for tests in results.values())
+failed = (results[TestType.TOTAL][ResultType.FAIL]
+          + results[TestType.TOTAL][ResultType.ERROR])
 if failed:
     if __debug__ and not '--headless' in sys.argv:
         # pylint: disable-next=protected-access
