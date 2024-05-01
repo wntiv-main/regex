@@ -13,11 +13,14 @@ except ImportError as e:
     raise e  # raise to user
 
 from .regexutil import MatchConditions, ParserPredicate, State
+from .regex_optimiser import _OptimiseRegex
 
 
-def _set_deep_copy(value: set) -> set:
+# Just realized you can use this as a decorator omg so cleeeann
+@np.vectorize
+def _edge_map_deep_copy(value: set) -> set:
     """
-    Deep copy a set with .copy()able elements
+    Deep copy a numpy ndarray of sets of .copy()able elements
 
     Arguments:
         value -- The set to copy
@@ -139,9 +142,11 @@ class Regex:
             case (Regex() as x,), {}:
                 result = super().__new__(cls)
                 # Deep copy sets within table
-                result.edge_map = np.vectorize(_set_deep_copy)(x.edge_map)
+                result.edge_map = _edge_map_deep_copy(x.edge_map)
                 result.start = x.start
                 result.end = x.end
+                if x._base is not None:
+                    result._base = x._base.copy()
                 return result
             case (), {"_privated": _}:
                 result = super().__new__(cls)
@@ -205,8 +210,6 @@ class Regex:
             connection -- The transition which should connect the two
                 states.
         """
-        # if not self.edge_map[start_state, end_state]:
-        #     self.edge_map[start_state, end_state] = set()
         if not connection.kind_of_in(self.edge_map[start_state,
                                                    end_state]):
             self.edge_map[start_state, end_state].add(connection)
@@ -226,8 +229,6 @@ class Regex:
             connections -- A collection of all the transitions that
                 should join the two states.
         """
-        # if not self.edge_map[start_state, end_state]:
-        #     self.edge_map[start_state, end_state] = set()
         # Deep copy needed
         for edge in connections:
             self.connect(start_state, end_state, edge.copy())
@@ -408,6 +409,10 @@ class Regex:
         Returns:
             The current object instance.
         """
+        if self._base is not None:
+            self._base += other
+            self._prepare_for_use_from_base()
+            return self
         if isinstance(other, Regex):
             offset = self.size
             self._diagonal_block_with(other.edge_map)
@@ -458,6 +463,10 @@ class Regex:
         """
         if not isinstance(scalar, int):
             return NotImplemented
+        if self._base is not None:
+            self._base *= scalar
+            self._prepare_for_use_from_base()
+            return self
         if scalar == 0:
             self.edge_map = Regex._empty_arr((1, 1))
             self.start = self.end = 0
@@ -500,6 +509,10 @@ class Regex:
         Returns:
             The current Regex instance.
         """
+        if self._base is not None:
+            self._base |= other
+            self._prepare_for_use_from_base()
+            return self
         offset = self.size
         self._diagonal_block_with(other.edge_map)
         # Connect our start to their start
@@ -526,6 +539,38 @@ class Regex:
         result |= other
         return result
 
+    def optional(self) -> Self:
+        """
+        Makes the current Regex optional, so that either a matching
+        string or an empty string can match.
+
+        Returns:
+            The current Regex instance.
+        """
+        if self._base is not None:
+            self._base.optional()
+            self._prepare_for_use_from_base()
+            return self
+        self.connect(self.start, self.end,
+                     MatchConditions.epsilon_transition)
+        return self
+
+    def repeat(self) -> Self:
+        """
+        Makes the current Regex repeated, so that it will match any
+        number of sequential matching strings.
+
+        Returns:
+            The current Regex instance.
+        """
+        if self._base is not None:
+            self._base.repeat()
+            self._prepare_for_use_from_base()
+            return self
+        self.connect(self.end, self.start,
+                     MatchConditions.epsilon_transition)
+        return self
+
     def reverse(self) -> 'Regex':
         """
         Reverses the regex, so that it matches the reversed strings.
@@ -536,6 +581,8 @@ class Regex:
         if self._reverse is None:
             self._prepare_full_reverse()
         assert self._reverse is not None
+        # Use cached version, copy to ensure no weirdness if it is
+        # modified
         return self._reverse.copy()
     __neg__ = reverse
 
@@ -548,23 +595,73 @@ class Regex:
         """
         result = self.copy()
         result.edge_map = result.edge_map.transpose()
+        # Swap begin- and end- moves
+        for edges in result.edge_map.flat: # type: ignore
+            # Pylance does not understand numpy inner array type ^
+            edges: set[ParserPredicate]
+            if (MatchConditions.end in edges
+                    and MatchConditions.begin not in edges):
+                edges.remove(MatchConditions.end)
+                edges.add(MatchConditions.begin)
+            elif (MatchConditions.begin in edges
+                  and MatchConditions.end not in edges):
+                edges.remove(MatchConditions.begin)
+                edges.add(MatchConditions.end)
         result.start = self.end
         result.end = self.start
         return result
 
+    def _prepare_for_use_from_base(self) -> None:
+        """
+        Update this Regex from the underlying _base Regex, useful when
+        the _base Regex is modified
+        """
+        # Need to access other Regex instances
+        # pylint: disable=protected-access
+        # Revert state to initial state
+        assert self._base is not None
+        self.edge_map = _edge_map_deep_copy(self._base.edge_map)
+        self.start = self._base.start
+        self.end = self._base.end
+        self._prepare_for_use()
+
+    def _prepare_for_use(self) -> None:
+        """
+        Convert this anchored regular expression to a fully-functional
+        one which is capable of making substring matches
+        """
+        self.connect(self.start, self.start,
+                     # There is member pylint its not a function
+                     # pylint: disable-next=no-member
+                     MatchConditions.consume_any.copy())
+        # Handle anchored moves
+        anchored_start: Optional[State] = None
+        for state, edges in enumerate(self.edge_map[self.start, :]):
+            if not MatchConditions.begin in edges:
+                continue
+            edges.remove(MatchConditions.begin)
+            if anchored_start is None:
+                anchored_start = self.add_state()
+                self.connect(anchored_start, self.start,
+                             MatchConditions.epsilon_transition)
+                self.start = anchored_start
+            self._merge_outputs(anchored_start, state)
+        _OptimiseRegex(self)
+        # Clear _reverse to ensure it is up-to-date
+        self._reverse = None
+
     def _prepare_full_reverse(self) -> None:
         # Need to access other Regex instances
         # pylint: disable=protected-access
-        # Import here to avoid cyclic dependency due to type-annotating
-        # in regex_optimiser.py
-        # pylint: disable-next=import-outside-toplevel
-        from .regex_optimiser import _OptimiseRegex
         assert self._base is not None
         reverse = self._base._basic_reverse()
         _OptimiseRegex(reverse)
         reverse._base = reverse.copy()
         reverse.connect(reverse.start,
                         reverse.start,
+                        # Pylint doesn't recognise consume_any as a
+                        # ConsumeAny instance
+                        # pylint: disable-next=no-member
                         MatchConditions.consume_any.copy())
         _OptimiseRegex(reverse)
         reverse._reverse = self
@@ -668,12 +765,12 @@ class Regex:
             A collection of slice-string pairs, representing the
             index range and the substring of the match
         """
-        self._prepare_full_reverse()
         starts, ends = [], []
         idx = 0
         while (idx := self._match_index(value, start=idx)) >= 0:
             ends.append(idx)
-        self._prepare_full_reverse()
+        if self._reverse is None:
+            self._prepare_full_reverse()
         assert self._reverse is not None
         str_reverse = value[::-1] # cursed
         idx = 0
@@ -683,46 +780,33 @@ class Regex:
                                                  start=idx)) >= 0:
             starts.append(idx)
         # Map to sorted, "un"-reversed indices
-        print(starts, ends)
         starts.reverse()
         starts = map(lambda rev_idx: len(value) - rev_idx, starts)
         # Match up starts and ends
         return map(lambda tup: (slice(*tup), value[slice(*tup)]),
                    zip(starts, ends))
-    
+
     def replace_in(self, value: str, replace_with: str) -> str:
+        """
+        Replaces all occurances of this Regex with the specified string.
+        '%0' in the replacement string gets replaced with the match
+        substring
+
+        Arguments:
+            value -- The string to find/replace in
+            replace_with -- The replacement substring
+
+        Returns:
+            The new string with the replacements applied
+        """
         result = ''
         last_idx = 0
         for idx, substr in self.match(value):
-            result += value[last_idx:idx.start - 1]
-            last_idx = idx.stop + 1
+            result += value[last_idx:idx.start]
+            last_idx = idx.stop
             result += replace_with.replace('%0', substr)
         result += value[last_idx:]
         return result
-
-    def optional(self) -> Self:
-        """
-        Makes the current Regex optional, so that either a matching
-        string or an empty string can match.
-
-        Returns:
-            The current Regex instance.
-        """
-        self.connect(self.start, self.end,
-                     MatchConditions.epsilon_transition)
-        return self
-
-    def repeat(self) -> Self:
-        """
-        Makes the current Regex repeated, so that it will match any
-        number of sequential matching strings.
-
-        Returns:
-            The current Regex instance.
-        """
-        self.connect(self.end, self.start,
-                     MatchConditions.epsilon_transition)
-        return self
 
     def copy(self):
         """

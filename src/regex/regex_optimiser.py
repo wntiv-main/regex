@@ -8,7 +8,9 @@ from typing import Callable, Iterable, Self, override
 import weakref
 import numpy as np
 
-from .regex import Regex  # Type annotating
+# Pylint doesnt like loading sub-modules ig...?
+# pylint: disable-next=no-name-in-module
+from . import regex as rx  # Type annotating
 from .regexutil import (ConsumeAny, ConsumeString, MatchConditions,
                         ParserPredicate, SignedSet, State)
 
@@ -151,7 +153,7 @@ class _OptimiseRegex(_MovingIndexHandler):
     # Requires a lot of access to Regex objects
     # pylint: disable=protected-access
 
-    regex: Regex
+    regex: 'rx.Regex'
     """The Regex to optimise"""
 
     todo: set[_MovingIndex]
@@ -214,7 +216,7 @@ class _OptimiseRegex(_MovingIndexHandler):
         """Amount of states to iterate"""
         return self.regex.size
 
-    def __init__(self, regex: Regex):
+    def __init__(self, regex: 'rx.Regex'):
         """
         Optimises a Regex to use minimal states without any epsilon moves or
         non-deterministic junctions
