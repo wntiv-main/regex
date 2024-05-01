@@ -5,10 +5,14 @@ __author__ = "Callum Hynes"
 from regex.regexutil import MatchConditions  # type: ignore
 from .regex_tests import (NodeMatcher, RegexState,
                           TestNoParseError, TestParseError,
-                          TestRegexMatches, TestRegexShape)
+                          TestRegexMatches, TestRegexMatchesAt, TestRegexShape)
 from .test import TestType
 
 # pylint: disable=missing-function-docstring
+
+# =============================
+# |     Full string tests     |
+# =============================
 
 # Digits
 @TestRegexShape(r"\A\d")
@@ -327,3 +331,62 @@ TestRegexMatches(
         "+64 022 345 6789",
         "+123456789999")                                           \
     .assert_doesnt_match("41568739037463", "+()--", "")
+
+# =============================
+# |      Substring tests      |
+# =============================
+
+TestRegexMatches(r"hello")                 \
+    .assert_matches(
+        "reujdengvjkfdmkjhelloewoijkmlkf",
+        "Bob says \"hello\"",
+        "hello, world",
+        "chello")                          \
+    .assert_doesnt_match(
+        "shell",
+        "hjello",
+        "Hello",
+        "shell of",
+        "shelf lo",
+        "olleh",
+        "hell")
+
+TestRegexMatches(r"hello", test_type=TestType.BOUNDARY) \
+    .assert_matches(
+        "hello world",
+        "say hello",
+        "hello")                                        \
+    .assert_doesnt_match(
+        "this is hell",
+        "ello there")
+
+_BOB_EMAIL = "bob.ross@gmail.com"
+_BOB_PHONE = "+12 987 456 3212"
+_FRED_EMAIL = "fred1998@x.com"
+_FRED_PHONE = "+99 (121)232-4656"
+_EXAMPLE_STR = f"""
+--- Bob ---
+Bob is an exceptional employee. He works passionately and very \
+efficiently completes tasks before deadlines. You can contact Bob at \
+{_BOB_EMAIL}, or phone him at {_BOB_PHONE}.
+
+--- Fred ---
+Fred is a highly valued student at Example University. They achieve \
+well above average in most their assignments. Fred has a strong work \
+ethic and is helpful and friendly when working with team members. You \
+can get in touch with him at {_FRED_EMAIL}, or {_FRED_PHONE}.
+""".strip()
+
+# (Seemingly) redundent item access is actually cursed way to abuse
+# slice notation to specify our test expectations
+# pylint: disable=expression-not-assigned
+TestRegexMatchesAt(
+        r"(?P<user>\w+(?:\.\w+)*)@(?P<domain>\w+(?:\.\w+)+)") \
+    .assert_matches_at(_EXAMPLE_STR)[
+        _EXAMPLE_STR.index(_BOB_EMAIL)
+        : _EXAMPLE_STR.index(_BOB_EMAIL) + len(_BOB_EMAIL)
+        : _BOB_EMAIL,
+        _EXAMPLE_STR.index(_FRED_EMAIL)
+        : _EXAMPLE_STR.index(_FRED_EMAIL) + len(_FRED_EMAIL)
+        : _FRED_EMAIL
+    ]
