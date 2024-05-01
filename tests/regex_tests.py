@@ -655,7 +655,7 @@ class TestRegexMatchesAt(TestCase):
     _regex: Regex | None
     """The Regex compiled from the regular expression pattern"""
 
-    _expected_matches: dict[str, tuple[slice]]
+    _expected_matches: dict[str, tuple[slice, ...]]
     """The set of strings expected to match"""
 
     class _Helper: # pylint: disable=too-few-public-methods
@@ -669,7 +669,7 @@ class TestRegexMatchesAt(TestCase):
 
         _source_str: str
         """The string to search for the given matches"""
-        
+
         def __init__(self, parent: 'TestRegexMatchesAt',
                      source: str):
             self._parent = parent
@@ -718,10 +718,10 @@ class TestRegexMatchesAt(TestCase):
                 first = False
             else:
                 expected += "; and"
-            expected += f" in '{value}' at "
+            expected += f" in ```{value}``` at "
             expected += ', '.join(
                 f"{idx.start}:{idx.stop}" + (
-                    f" (should match '{idx.step}')"
+                    f" (should match `{idx.step}`)"
                     if idx.step is not None else '')
                 for idx in matches)
         self.set_expected(expected)
@@ -740,7 +740,7 @@ class TestRegexMatchesAt(TestCase):
                         raise RegexPositionalMatchError(
                             self._regex, source, idx,
                             RegexPositionalMatchError.Type.MATCH_MISSED)
-                    if idx.step is not None and idx.step != pos[1]: 
+                    if idx.step is not None and idx.step != pos[1]:
                         raise RegexPositionalMatchError(
                             self._regex, source, idx,
                             RegexPositionalMatchError

@@ -7,7 +7,7 @@ __all__ = ["TestError", "TestErrorImpl", "ExceptionAsTestError",
 
 from abc import ABC, abstractmethod
 from enum import IntEnum, auto
-from typing import TypeAlias, assert_never, override
+from typing import Any, assert_never, override
 
 from regex import Regex
 from regex.regexutil import ParserPredicate, State
@@ -229,7 +229,7 @@ class RegexPositionalMatchError(TestError):
     _error_type: Type
     """The specific type of the error"""
 
-    def __init__(self,
+    def __init__(self, # pylint: disable=too-many-arguments
                  regex: Regex,
                  source: str,
                  test: slice,
