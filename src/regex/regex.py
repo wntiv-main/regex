@@ -658,6 +658,16 @@ class Regex:
                 return end_idx
 
     def match(self, value: str) -> Iterable[tuple[slice, str]]:
+        """
+        Searches the given string for matches of the Regex
+
+        Arguments:
+            value -- The string to search
+
+        Returns:
+            A collection of slice-string pairs, representing the
+            index range and the substring of the match
+        """
         self._prepare_full_reverse()
         starts, ends = [], []
         idx = 0
@@ -679,6 +689,16 @@ class Regex:
         # Match up starts and ends
         return map(lambda tup: (slice(*tup), value[slice(*tup)]),
                    zip(starts, ends))
+    
+    def replace_in(self, value: str, replace_with: str) -> str:
+        result = ''
+        last_idx = 0
+        for idx, substr in self.match(value):
+            result += value[last_idx:idx.start - 1]
+            last_idx = idx.stop + 1
+            result += replace_with.replace('%0', substr)
+        result += value[last_idx:]
+        return result
 
     def optional(self) -> Self:
         """
