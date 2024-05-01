@@ -645,7 +645,8 @@ class Regex:
                 self.start = self.add_state()
                 self.connect(self.start, unanchored_start,
                              MatchConditions.epsilon_transition)
-            self._merge_outputs(self.start, state)
+            self.connect(self.start, state,
+                            MatchConditions.epsilon_transition)
         if unanchored_start is not None:
             self._remove_if_unreachable(unanchored_start)
         _OptimiseRegex(self)

@@ -29,10 +29,10 @@ def main():
     Regex._debug_function = debug
     try:
         # r"\w+(?:\.\w+)*@\w+(?:\.\w+)+"
-        rx = Regex(r"\Aa{3,5}")
+        rx = Regex(r"\A(a|b|c)*")
         assert rx._base is not None
-        mfv.add(DebugGraphViewer(rx._base.edge_map,
-                                 rx._base.start, rx._base.end).render())
+        mfv.add(DebugGraphViewer(rx.edge_map,
+                                 rx.start, rx.end).render())
         # rxr = rx.reverse()
         # # while (i := input("emailish??: ")):
         # #     print(rx.replace_in(i, '(%0)'))

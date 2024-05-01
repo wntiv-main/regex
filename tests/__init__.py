@@ -74,18 +74,14 @@ TestParseError(r'*abc')
 @TestRegexShape(r"\A(a?b?c?)*",
                 expecting="all epsilon-moves to be removed")
 def test_epsilon_closure_and_minification(start: NodeMatcher):
-    start.is_also(RegexState.END)          \
-        .has_literal('a', RegexState.SELF) \
-        .has_literal('b', RegexState.SELF) \
-        .has_literal('c', RegexState.SELF)
+    start.is_also(RegexState.END) \
+        .has_any('abc', RegexState.SELF)
 
 @TestRegexShape(r"\A(a|b|c)*",
                 expecting="all epsilon-moves to be removed")
 def test_epsilon_closure_and_minification_with_or(start: NodeMatcher):
-    start.is_also(RegexState.END)          \
-        .has_literal('a', RegexState.SELF) \
-        .has_literal('b', RegexState.SELF) \
-        .has_literal('c', RegexState.SELF)
+    start.is_also(RegexState.END) \
+        .has_any('abc', RegexState.SELF)
 
 
 # Plus

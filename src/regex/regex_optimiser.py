@@ -509,6 +509,10 @@ class _OptimiseRegex(_MovingIndexHandler):
             if s2.value() == self.regex.end:
                 self.regex.end = s1.value()
             self.regex._merge_outputs(s1.value(), s2.value())
+            # Merge s2 self-loops also
+            self.regex.connect_many(s1.value(), s1.value(),
+                                    self.regex.edge_map[s2.value(),
+                                                        s2.value()])
             self.regex._remove_state(s2.value())
             self.todo.add(self.index(s1))
             # Intended side-effect: will set s2's value to -1
