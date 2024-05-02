@@ -157,7 +157,7 @@ class DebugGraphViewer:
         # A list of edges for each connection between nodes
         edges_by_conn: dict[tuple[int, int],
                                   list[tuple[int, int, int, str]]] = {}
-        max_len = 100 // self._graph.number_of_nodes()
+        max_len = 20 + 100 // self._graph.number_of_nodes()
         for start, end, key, label in self._graph.edges(
                 keys=True, data='label'): # type: ignore
             if len(label) > max_len:

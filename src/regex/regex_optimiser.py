@@ -665,6 +665,7 @@ class _OptimiseRegex(_MovingIndexHandler):
                         out.value(),
                         ignore_paths_through={out.value()},
                         terminate_at={self.regex.start, other})
+                and other != self.regex.end
                     #  or state.value() == self.regex.start # ???
             )):
                 # One side covered by intersection
@@ -711,10 +712,10 @@ class _OptimiseRegex(_MovingIndexHandler):
         msg = f"power2 {state} -> {out1} & {out2} -> {new_state}"
         for out in out1, out2:
             if out.value() == self.regex.end:
-                # self.regex.connect(out.value(), new_state.value(),
-                #                    MatchConditions.epsilon_transition)
-                # self.regex.end = out.value()
-                # self.todo.add(self.index(out))
+                self.regex.connect(out.value(), new_state.value(),
+                                   MatchConditions.epsilon_transition)
+                self.regex.end = out.value()
+                self.todo.add(self.index(out))
                 pass
             else:
                 self._remove_group_if_unreachable(out.value())
