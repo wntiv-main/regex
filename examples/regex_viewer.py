@@ -1,5 +1,6 @@
 """Example match explorer GUI for email regex"""
 
+import sys
 import tkinter
 from tkinter import Tk, Text
 
@@ -10,6 +11,10 @@ email_rx = Regex(r"(\w+(?:\.\w+)*)@(\w+(?:\.\w+)+)")
 print("Loaded email regex")
 phone_rx = Regex(r"(?:\+\d{1,2}\s*)?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}")
 print("Loaded phone regex")
+
+# For pyinstaller build testing
+if "--just-testing" in sys.argv:
+    sys.exit()
 
 win = Tk()
 text_field = Text(win)

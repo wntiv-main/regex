@@ -4,7 +4,7 @@ on: [push]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     strategy:
       matrix:
         python-version: ["3.12"]
@@ -19,12 +19,16 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install --upgrade setuptools
         python -m pip install --upgrade build
+        python -m pip install --upgrade pyinstaller
     - name: Build module
       run: |
         python -m build
     - name: Install module
       run: |
         pip install $(ls dist/*.whl)
-    - name: Running tests
+    - name: Build example executable
       run: |
-        python -m tests --headless
+        pyinstaller example_regex_viewer.py
+    - name: Run example executable
+      run: |
+        $(ls dist/*.exe) --just-testing
