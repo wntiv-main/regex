@@ -65,6 +65,9 @@ def on_change(*_):
                            row_col_coords(text, idx[0].start),
                            row_col_coords(text, idx[0].stop))
 
+# Prepare initial highlights
+on_change()
+
 text_field.bind("<KeyRelease>", on_change)
 
 win.mainloop()

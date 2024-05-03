@@ -382,11 +382,24 @@ can get in touch with him at {_FRED_EMAIL}, or {_FRED_PHONE}.
 # pylint: disable=expression-not-assigned
 TestRegexMatchesAt(
         r"(?P<user>\w+(?:\.\w+)*)@(?P<domain>\w+(?:\.\w+)+)") \
-    .assert_matches_at(_EXAMPLE_STR)[
-        _EXAMPLE_STR.index(_BOB_EMAIL)
-        : _EXAMPLE_STR.index(_BOB_EMAIL) + len(_BOB_EMAIL)
-        : _BOB_EMAIL,
-        _EXAMPLE_STR.index(_FRED_EMAIL)
-        : _EXAMPLE_STR.index(_FRED_EMAIL) + len(_FRED_EMAIL)
-        : _FRED_EMAIL
-    ]
+    .assert_matches_at(_EXAMPLE_STR)                          \
+    .match_at( # not using slice notation because of calculated values
+        start=_EXAMPLE_STR.index(_BOB_EMAIL),
+        end=_EXAMPLE_STR.index(_BOB_EMAIL) + len(_BOB_EMAIL),
+        substr=_BOB_EMAIL)                                    \
+    .match_at(
+        start=_EXAMPLE_STR.index(_FRED_EMAIL),
+        end=_EXAMPLE_STR.index(_FRED_EMAIL) + len(_FRED_EMAIL),
+        substr=_FRED_EMAIL)
+
+TestRegexMatchesAt(
+    r"(?:\+\d{1,2}\s*)?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}") \
+    .assert_matches_at(_EXAMPLE_STR)                           \
+    .match_at(  # not using slice notation because of calculated values
+        start=_EXAMPLE_STR.index(_BOB_PHONE),
+        end=_EXAMPLE_STR.index(_BOB_PHONE) + len(_BOB_PHONE),
+        substr=_BOB_PHONE)                                    \
+    .match_at(
+        start=_EXAMPLE_STR.index(_FRED_PHONE),
+        end=_EXAMPLE_STR.index(_FRED_PHONE) + len(_FRED_PHONE),
+        substr=_FRED_PHONE)

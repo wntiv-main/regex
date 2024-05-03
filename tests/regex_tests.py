@@ -661,7 +661,8 @@ class TestRegexMatchesAt(TestCase):
     class _Helper: # pylint: disable=too-few-public-methods
         """
         Handles asserting expected matches, using a clean(ish) syntax by
-        allowing slice notation (in a slightly cursed way)
+        allowing slice notation (in a slightly cursed way), or
+        alternatively using a method in a more pythonic way
         """
 
         _parent: 'TestRegexMatchesAt'
@@ -674,6 +675,30 @@ class TestRegexMatchesAt(TestCase):
                      source: str):
             self._parent = parent
             self._source_str = source
+
+        def match_at(
+                self,
+                start: int,
+                end: int | None = None,
+                *, substr: str | None = None) -> Self:
+            """
+            Asserts that the Regex matches at this location in the
+            source string, and (optionally) finds the right substring
+
+            Arguments:
+                start -- The expected match start index
+                end -- The expected match end index (optional)
+
+            Keyword Arguments:
+                substr -- The expected substring (optional)
+            """
+            # pylint: disable=protected-access
+            if self._source_str not in self._parent._expected_matches:
+                self._parent._expected_matches[self._source_str] = ()
+            # remember tuples are immutable, but their containers aren't
+            self._parent._expected_matches[
+                self._source_str] += (slice(start, end, substr),)
+            return self
 
         def __getitem__(
             self,
@@ -692,6 +717,7 @@ class TestRegexMatchesAt(TestCase):
             Returns:
                 The parent test case, for chaining
             """
+            # pylint: disable=protected-access
             if isinstance(match_positions, slice):
                 match_positions = (match_positions,)
             self._parent._expected_matches[

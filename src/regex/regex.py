@@ -688,8 +688,6 @@ class Regex:
             if state == self.end or (MatchConditions.epsilon_transition
                     in self.edge_map[state, self.end]):
                 break
-            print(f"At state {state}")
-            print(f"'{value}'\n {' '*ctx._cursor}^")
             for i in range(self.size):
                 for edge in self.edge_map[state, i]:
                     edge: ParserPredicate
