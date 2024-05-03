@@ -26,5 +26,6 @@ jobs:
       run: |
         pip install $(ls dist/*.whl)
     - name: Running tests
+      timeout-minutes: 3
       run: |
         python -m tests --headless

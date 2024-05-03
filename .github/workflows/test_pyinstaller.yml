@@ -28,7 +28,8 @@ jobs:
         pip install $(ls dist/*.whl)
     - name: Build example executable
       run: |
-        pyinstaller example_regex_viewer.py
+        pyinstaller example_regex_viewer.spec
     - name: Run example executable
+      timeout-minutes: 3
       run: |
         dist/example_regex_viewer.exe --just-testing
