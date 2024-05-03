@@ -162,58 +162,6 @@ class _OptimiseRegex(_MovingIndexHandler):
     todo: set[_MovingIndex]
     """Set of states that should be visited"""
 
-    compositions: dict[_MovingIndex, list[_MovingIndex]]
-
-    def add_compositions(self, state: _MovingIndex | int,
-                         *new_composites: _MovingIndex) -> None:
-        """
-        Tag the given state as being composed of the other given states,
-        in powerset construction
-
-        Arguments:
-            state -- The state being marked as composite
-            *new_composites -- The states that make the composite state
-        """
-        if isinstance(state, _MovingIndex):
-            state = state.value()
-        for key, composites in self.compositions.items():
-            # dont get confused between key/value pairs and the key's
-            # internal value!!
-            if key.value() == state:
-                # Key already exists, update
-                composites.extend(new_composites)
-                break
-        # If you're this deep within the code, I expect you to know
-        # what a for...else statement is. If you don't like my use of
-        # them (some people complain that they don't read well) then
-        # shhhh... its my code not yours, I'm not going to make my code
-        # more complicated for "readability" when it reads perfectly
-        # well as is.
-        else:
-            # Create key
-            self.compositions[self.index(state)] = list(new_composites)
-
-    def get_compositions(self,
-                         state: _MovingIndex | int) -> tuple[int, ...]:
-        """
-        Get all of the states that compose this state (when this state
-        is the result of a composition of states durig powerset
-        construction)
-
-        Returns:
-            A collection of the composing indices
-        """
-        if isinstance(state, _MovingIndex):
-            state = state.value()
-        for key, value in self.compositions.items():
-            # dont get confused between key/value pairs and the key's
-            # internal value!!
-            if key.value() == state:
-                # Map is lazily-computed, cast to tuple to force
-                # compution now, and avoid multiple-compution downstream
-                return tuple(map(_MovingIndex.value, value))
-        return ()
-
     @override
     def size(self) -> int:
         """Amount of states to iterate"""
@@ -230,7 +178,6 @@ class _OptimiseRegex(_MovingIndexHandler):
         super().__init__()
         self.regex = regex
         self.todo = set(map(self.index, range(self.regex.size)))
-        self.compositions = {}
         self.optimise()
 
     def _get_unreachable_at(
@@ -670,6 +617,7 @@ class _OptimiseRegex(_MovingIndexHandler):
                 # are the ones that stick :D
                 # Wait i think the fix im implementing now will make
                 # this redundant (i hope cuz this is cursed)
+                # I havent tested yet but maybe
                 all_edges: Iterable[set[ParserPredicate]]\
                     = self.regex.edge_map[out.value(), :]
                 end_out_coverage: SignedSet[str] = SignedSet.union(
@@ -693,10 +641,8 @@ class _OptimiseRegex(_MovingIndexHandler):
                         out.value(),
                         ignore_paths_through={out.value()},
                         terminate_at={self.regex.start, other})
-                and other != self.regex.end
-                    #  or state.value() == self.regex.start # ???
-            )):
-                # One side covered by intersection
+                and other != self.regex.end)):
+                # Special case: One side covered by intersection
                 self.regex.connect_many(state.value(),
                                    out.value(), intersect_edges)
                 self.regex._merge_outputs(out.value(), other)
@@ -711,21 +657,19 @@ class _OptimiseRegex(_MovingIndexHandler):
                 return
         # Add new state for the intersection
         new_state = self.index(self.regex.add_state())
-        self.add_compositions(new_state,
-                              self.index(out1), self.index(out2))
         self.todo.add(self.index(new_state))
         self.regex.connect_many(state.value(), new_state.value(),
                                 intersect_edges)
-        # This comment outdated, probably ignore
-        # Otherwise, merge
+        # Intersection state should have outputs of both `out` states
         self.regex._merge_outputs(new_state.value(), out1.value())
         self.regex._merge_outputs(new_state.value(), out2.value())
-        # Some magic with self-loops im not entirely sure why
+        # Loops on both need moved to intersection state
+        # This avoids infinite loops when there is a loop on both `out`
+        # states
         loops1: set[ParserPredicate] = self.regex.edge_map[
             new_state.value(), out1.value()]
         loops2: set[ParserPredicate] = self.regex.edge_map[
             new_state.value(), out2.value()]
-        # Loops on both need moved
         self.regex.connect_many(new_state.value(), new_state.value(),
                                 self._edge_intersects(loops1, loops2))
         main_loop_coverage = SignedSet.union(
@@ -737,11 +681,12 @@ class _OptimiseRegex(_MovingIndexHandler):
         msg = f"power2 {state} -> {out1} & {out2} -> {new_state}"
         for out in out1, out2:
             if out.value() == self.regex.end:
+                # End should be immediately reachable, like it was
+                # before the powerset construction
                 self.regex.connect(new_state.value(), out.value(),
                                    MatchConditions.epsilon_transition)
                 self.regex.end = out.value()
                 self.todo.add(self.index(out))
-                pass
             else:
                 self._remove_group_if_unreachable(out.value())
         self.regex._debug(msg)
