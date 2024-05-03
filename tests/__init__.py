@@ -360,6 +360,21 @@ TestRegexMatches(r"hello", test_type=TestType.BOUNDARY) \
         "this is hell",
         "ello there")
 
+# (Seemingly) redundent __getitem__ access is actually cursed way to
+# abuse slice notation to specify our test expectations
+# Not very pythonic, but simple and looks kinda clean
+# pylint: disable=expression-not-assigned
+TestRegexMatchesAt(r"hello")                             \
+    .assert_matches_at(
+        "fred says hello, bob says hello")[10:15, 26:31] \
+    .assert_matches_at("hello there, chello")[0:5, 14:19]
+
+# pylint: disable=expression-not-assigned
+TestRegexMatchesAt(r"hello", test_type=TestType.BOUNDARY) \
+    .assert_matches_at("hello world")[0:5:'hello']        \
+    .assert_matches_at("say hello")[4:9:'hello']          \
+    .assert_matches_at("hello")[0:5:'hello']
+
 _BOB_EMAIL = "bob.ross@gmail.com"
 _BOB_PHONE = "+12 987 456 3212"
 _FRED_EMAIL = "fred1998@x.com"
@@ -368,7 +383,7 @@ _EXAMPLE_STR = f"""
 --- Bob ---
 Bob is an exceptional employee. He works passionately and very \
 efficiently completes tasks before deadlines. You can contact Bob at \
-{_BOB_EMAIL}, or phone him at {_BOB_PHONE}.
+{_BOB_EMAIL}. Alternatively, phone him at {_BOB_PHONE}.
 
 --- Fred ---
 Fred is a highly valued student at Example University. They achieve \
@@ -377,17 +392,14 @@ ethic and is helpful and friendly when working with team members. You \
 can get in touch with him at {_FRED_EMAIL}, or {_FRED_PHONE}.
 """.strip()
 
-# (Seemingly) redundent item access is actually cursed way to abuse
-# slice notation to specify our test expectations
-# pylint: disable=expression-not-assigned
 TestRegexMatchesAt(
         r"(?P<user>\w+(?:\.\w+)*)@(?P<domain>\w+(?:\.\w+)+)") \
     .assert_matches_at(_EXAMPLE_STR)                          \
-    .match_at( # not using slice notation because of calculated values
+    .with_match_at( # not using slices because of long calculated values
         start=_EXAMPLE_STR.index(_BOB_EMAIL),
         end=_EXAMPLE_STR.index(_BOB_EMAIL) + len(_BOB_EMAIL),
         substr=_BOB_EMAIL)                                    \
-    .match_at(
+    .with_match_at(
         start=_EXAMPLE_STR.index(_FRED_EMAIL),
         end=_EXAMPLE_STR.index(_FRED_EMAIL) + len(_FRED_EMAIL),
         substr=_FRED_EMAIL)
@@ -395,11 +407,11 @@ TestRegexMatchesAt(
 TestRegexMatchesAt(
     r"(?:\+\d{1,2}\s*)?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}") \
     .assert_matches_at(_EXAMPLE_STR)                           \
-    .match_at(  # not using slice notation because of calculated values
+    .with_match_at( # not using slices because of long calculated values
         start=_EXAMPLE_STR.index(_BOB_PHONE),
         end=_EXAMPLE_STR.index(_BOB_PHONE) + len(_BOB_PHONE),
         substr=_BOB_PHONE)                                    \
-    .match_at(
+    .with_match_at(
         start=_EXAMPLE_STR.index(_FRED_PHONE),
         end=_EXAMPLE_STR.index(_FRED_PHONE) + len(_FRED_PHONE),
         substr=_FRED_PHONE)

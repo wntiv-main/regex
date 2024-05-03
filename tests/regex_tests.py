@@ -676,7 +676,7 @@ class TestRegexMatchesAt(TestCase):
             self._parent = parent
             self._source_str = source
 
-        def match_at(
+        def with_match_at(
                 self,
                 start: int,
                 end: int | None = None,
