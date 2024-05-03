@@ -608,7 +608,10 @@ class _OptimiseRegex(_MovingIndexHandler):
         for out in out1, out2:
             other = out.value() ^ out1.value() ^ out2.value()
             # Special end state edge-case hope this works PLEASE
-            if out.value() == self.regex.end:
+            if (out.value() == self.regex.end
+                or MatchConditions.epsilon_transition
+                    in self.regex.edge_map[out.value(),
+                                           self.regex.end]):
                 # Checks
                 # i give up please stop asking me what this code does
                 # how tf am i meant to know
@@ -618,6 +621,7 @@ class _OptimiseRegex(_MovingIndexHandler):
                 # Wait i think the fix im implementing now will make
                 # this redundant (i hope cuz this is cursed)
                 # I havent tested yet but maybe
+                # Kinda think we still need it :/
                 all_edges: Iterable[set[ParserPredicate]]\
                     = self.regex.edge_map[out.value(), :]
                 end_out_coverage: SignedSet[str] = SignedSet.union(

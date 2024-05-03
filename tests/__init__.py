@@ -360,7 +360,7 @@ TestRegexMatches(r"hello", test_type=TestType.BOUNDARY) \
         "this is hell",
         "ello there")
 
-# (Seemingly) redundent __getitem__ access is actually cursed way to
+# (Seemingly) redundant __getitem__ access is actually cursed way to
 # abuse slice notation to specify our test expectations
 # Not very pythonic, but simple and looks kinda clean
 # pylint: disable=expression-not-assigned
