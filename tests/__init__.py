@@ -369,7 +369,6 @@ TestRegexMatchesAt(r"hello")                             \
         "fred says hello, bob says hello")[10:15, 26:31] \
     .assert_matches_at("hello there, chello")[0:5, 14:19]
 
-# pylint: disable=expression-not-assigned
 TestRegexMatchesAt(r"hello", test_type=TestType.BOUNDARY) \
     .assert_matches_at("hello world")[0:5:'hello']        \
     .assert_matches_at("say hello")[4:9:'hello']          \
