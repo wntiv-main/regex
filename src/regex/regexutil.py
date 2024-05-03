@@ -465,6 +465,8 @@ class ParserPredicate(ABC):
         """
         raise NotImplementedError()
 
+    # I realise now... this didn't have to be this way
+    # But... it is too late to change now
     def mutable_hash(self) -> int:
         """
         An alternative hash method that may change if the object is

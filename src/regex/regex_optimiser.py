@@ -568,6 +568,23 @@ class _OptimiseRegex(_MovingIndexHandler):
         # pylint: disable-next=protected-access
         self.regex._debug(f"fixed {start} -> {end}")
 
+    def _edges_remove_intersect(self,
+                                edges: set[ParserPredicate],
+                                intersect: SignedSet[str]) -> None:
+        for edge in edges.copy():
+            match edge:
+                case ConsumeAny():
+                    edge.match_set -= intersect
+                    if not edge.match_set:
+                        edges.remove(edge)
+                case ConsumeString():
+                    if edge.match_string in intersect:
+                        edges.remove(edge)
+                case MatchConditions.epsilon_transition:
+                    pass
+                case _:
+                    raise NotImplementedError()
+
     def _edge_intersects(
         self,
         first: set[ParserPredicate],
@@ -603,19 +620,7 @@ class _OptimiseRegex(_MovingIndexHandler):
                     first.remove(a)
                     second.remove(b)
                     intersect_edges.add(edge.copy())
-                    continue
-                match edge:
-                    case ConsumeAny():
-                        edge.match_set -= intersection
-                        if not edge.match_set:
-                            edges.discard(edge)
-                    case ConsumeString():
-                        if edge.match_string in intersection:
-                            edges.remove(edge)
-                    case MatchConditions.epsilon_transition:
-                        pass
-                    case _:
-                        raise NotImplementedError()
+            self._edges_remove_intersect(edges, intersection)
         # If intersect not already covered
         if (intersection - SignedSet.union(
             *(x.coverage() for x in intersect_edges
@@ -718,6 +723,7 @@ class _OptimiseRegex(_MovingIndexHandler):
         # Otherwise, merge
         self.regex._merge_outputs(new_state.value(), out1.value())
         self.regex._merge_outputs(new_state.value(), out2.value())
+        self.regex._debug(f"pwset outs {state} -> {out1}, {out2}")
         # Some magic with self-loops im not entirely sure why
         loops1: set[ParserPredicate] = self.regex.edge_map[
             new_state.value(), out1.value()]
@@ -726,6 +732,12 @@ class _OptimiseRegex(_MovingIndexHandler):
         # Loops on both need moved
         self.regex.connect_many(new_state.value(), new_state.value(),
                                 self._edge_intersects(loops1, loops2))
+        main_loop_coverage = SignedSet.union(
+            *(x.coverage() for x in self.regex.edge_map[
+                new_state.value(), new_state.value()]
+              if x != MatchConditions.epsilon_transition))
+        self._edges_remove_intersect(loops1, main_loop_coverage)
+        self._edges_remove_intersect(loops2, main_loop_coverage)
         self.regex._debug(f"pwset rmloops {state} -> {out1}, {out2}")
         msg = f"power2 {state} -> {out1} & {out2} -> {new_state}"
         for out in out1, out2:

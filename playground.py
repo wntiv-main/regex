@@ -20,16 +20,18 @@ def main():
     def debug(rx: Regex, msg: str):
         view = DebugGraphViewer(rx.edge_map,
                                 rx.start, rx.end)
-        fig = view.render()
-        fig.suptitle(str(rx), fontsize=8)
-        fig.canvas.manager.set_window_title(msg)  # type: ignore
-        mfv.add(fig)
+        # fig = view.render()
+        # fig.suptitle(str(rx), fontsize=12 - rx.size // 5)
+        # fig.canvas.manager.set_window_title(msg)  # type: ignore
+        # mfv.add(fig)
         print(f"{msg}:\n{rx}")
         # print(f"dupls: {rx._find_double_refs()}")
     Regex._debug_function = debug
     try:
         # r"\w+(?:\.\w+)*@\w+(?:\.\w+)+"
-        rx = Regex(r"(?:a{1,2}b*)?a")
+        # r"(?:ca{1,2}b*)?a"
+        # r"(?:\+\d{1,2}\s*)?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}"
+        rx = Regex(r"(?:\+\d{1,2}\s*)\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}")
         assert rx._base is not None
         mfv.add(DebugGraphViewer(rx.edge_map,
                                  rx.start, rx.end).render())

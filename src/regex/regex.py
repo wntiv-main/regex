@@ -830,7 +830,7 @@ class Regex:
                 if isinstance(edges, set) else "{}"
                 for edges in row]) + "]"
             for row in self.edge_map])
-        return f"[{inner_arrs}]: {self.start} -> {self.end}"
+        return f"[{inner_arrs}]: {self.start} --{self.size}> {self.end}"
 
     def _find_double_refs(self) -> Mapping[int, set[tuple[int, ...]]]:
         """
