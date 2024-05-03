@@ -33,8 +33,10 @@ def main():
         # r"(?:\+\d{1,2}\s*)?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}"
         rx = Regex(r"(?:\+\d{1,2}\s*)\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}")
         assert rx._base is not None
-        mfv.add(DebugGraphViewer(rx.edge_map,
-                                 rx.start, rx.end).render())
+        while (i := input("phone??: ")):
+            print(rx.test(i))
+        # mfv.add(DebugGraphViewer(rx.edge_map,
+        #                          rx.start, rx.end).render())
         # rxr = rx.reverse()
         # # while (i := input("emailish??: ")):
         # #     print(rx.replace_in(i, '(%0)'))

@@ -655,7 +655,6 @@ class _OptimiseRegex(_MovingIndexHandler):
         intersect_edges = self._edge_intersects(set1, set2)
         if not intersect_edges:
             return # No intersect to split off
-        self.regex._debug(f"pwset isect {state} -> {out1}, {out2}")
         # States were changed, check again
         self.todo.add(self.index(out1))
         self.todo.add(self.index(out2))
@@ -717,13 +716,10 @@ class _OptimiseRegex(_MovingIndexHandler):
         self.todo.add(self.index(new_state))
         self.regex.connect_many(state.value(), new_state.value(),
                                 intersect_edges)
-        self.regex._debug(f"pwset nwstate {state} -> {out1}, {out2} | "
-                          f"{{{', '.join(map(str, intersect_edges))}}}")
         # This comment outdated, probably ignore
         # Otherwise, merge
         self.regex._merge_outputs(new_state.value(), out1.value())
         self.regex._merge_outputs(new_state.value(), out2.value())
-        self.regex._debug(f"pwset outs {state} -> {out1}, {out2}")
         # Some magic with self-loops im not entirely sure why
         loops1: set[ParserPredicate] = self.regex.edge_map[
             new_state.value(), out1.value()]
@@ -738,7 +734,6 @@ class _OptimiseRegex(_MovingIndexHandler):
               if x != MatchConditions.epsilon_transition))
         self._edges_remove_intersect(loops1, main_loop_coverage)
         self._edges_remove_intersect(loops2, main_loop_coverage)
-        self.regex._debug(f"pwset rmloops {state} -> {out1}, {out2}")
         msg = f"power2 {state} -> {out1} & {out2} -> {new_state}"
         for out in out1, out2:
             if out.value() == self.regex.end:

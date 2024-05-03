@@ -684,7 +684,12 @@ class Regex:
         """
         ctx = MatchConditions(value)
         state = self.start
-        while state != self.end:
+        while True:
+            if state == self.end or (MatchConditions.epsilon_transition
+                    in self.edge_map[state, self.end]):
+                break
+            print(f"At state {state}")
+            print(f"'{value}'\n {' '*ctx._cursor}^")
             for i in range(self.size):
                 for edge in self.edge_map[state, i]:
                     edge: ParserPredicate
@@ -729,7 +734,8 @@ class Regex:
                 # "temp" workaround for not missing entire match
                 if end_idx > 0:
                     return end_idx
-            if state == self.end:
+            if state == self.end or (MatchConditions.epsilon_transition
+                    in self.edge_map[state, self.end]):
                 # pylint: disable-next=protected-access
                 end_idx = ctx._cursor
             exit_state: Optional[State] = None
