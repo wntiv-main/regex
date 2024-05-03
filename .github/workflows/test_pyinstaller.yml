@@ -31,4 +31,4 @@ jobs:
         pyinstaller example_regex_viewer.py
     - name: Run example executable
       run: |
-        $(ls dist/*.exe) --just-testing
+        dist/example_regex_viewer.exe --just-testing

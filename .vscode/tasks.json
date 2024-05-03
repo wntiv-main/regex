@@ -69,6 +69,14 @@
 			"type": "shell",
 			"args": ["-r", "-force", "${workspaceFolder}/dist/*"],
 			"problemMatcher": []
+		},
+		{
+			"label": "Example: Build executable",
+			"command": "pyinstaller",
+			"type": "shell",
+			"args": ["example_regex_viewer.spec"],
+			"dependsOn": ["Clean build output"],
+			"problemMatcher": []
 		}
 	]
 }
