@@ -55,7 +55,7 @@ def tag_remove_all(widget, tag_name):
         widget.tag_remove(tag_name, s, e)
 
 def on_change(*_):
-    """Keypress event listener to  update highlights"""
+    """Keypress event listener to update highlights"""
     text = text_field.get("1.0", tkinter.END)
     # Remove old tags
     tag_remove_all(text_field, "email_match")
