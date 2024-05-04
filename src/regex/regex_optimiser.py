@@ -153,7 +153,7 @@ class _OptimiseRegex(_MovingIndexHandler):
     Optimises a Regex to use minimal states without any epsilon moves or
     non-deterministic junctions
     """
-    # Requires a lot of access to Regex objects
+    # Requires a lot of access to Regex objects ("friend" class)
     # pylint: disable=protected-access
 
     regex: 'rx.Regex'
@@ -258,6 +258,10 @@ class _OptimiseRegex(_MovingIndexHandler):
         Returns:
             Whether the states are still able to merge
         """
+        # Lot of stuff here...  dont question it, it works
+        # At some point in time i wrote this, knowing what i was doing
+        # I no longer know what i was doing
+        # see: programming meme now only god knows
         return (edge == MatchConditions.epsilon_transition
                 or (edge.kind_of_in(self.regex.edge_map[s1, s1])
                     and edge.kind_of_in(self.regex.edge_map[s2, s2]))
@@ -362,7 +366,6 @@ class _OptimiseRegex(_MovingIndexHandler):
                 self.simple_powerset_construction(i, j)
             else:
                 # > Powerset construction <
-                # While loop as expect size to change
                 # Iterate lower half of triangle:
                 #   0 1 2 3 ->
                 # 0 \       (j)
@@ -400,8 +403,10 @@ class _OptimiseRegex(_MovingIndexHandler):
         if (MatchConditions.epsilon_transition
                 not in self.regex.edge_map[start.value(), end.value()]):
             return  # return early if no epsilon moves
-        num_inputs = self.regex._num_inputs(end.value(), exclude_self=True)
-        num_outputs = self.regex._num_outputs(start.value(), exclude_self=True)
+        num_inputs = self.regex._num_inputs(end.value(),
+                                            exclude_self=True)
+        num_outputs = self.regex._num_outputs(start.value(),
+                                              exclude_self=True)
         start_loops = self.regex.edge_map[start.value(), start.value()]
         end_loops = self.regex.edge_map[end.value(), end.value()]
         if ((num_inputs == 1 or num_outputs == 1)

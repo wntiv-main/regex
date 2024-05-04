@@ -389,6 +389,8 @@ class _RegexFactory:
             _OptimiseRegex(self.regex)
             self.regex._base = self.regex.copy()
             self.regex._prepare_for_use()
+            # Dont lazily initialize reverse if using Regex constructor
+            self.regex._prepare_full_reverse()
         return self.regex
 
     def parse_escaped(self, char: str) -> None:
@@ -531,7 +533,7 @@ class _RegexFactory:
             case '(':  # group
                 start_pos = self._cur - 1
                 # Capture groups, currently ignored
-                # Will use later maybe!
+                # Are available here for future extension
                 # pylint: disable-next=unused-variable
                 capture_group: CaptureGroup | None = None
                 if self._try_consume("?:"):

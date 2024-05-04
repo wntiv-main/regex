@@ -11,4 +11,5 @@ __author__ = "Callum Hynes"
 __all__ = ["Regex"]
 __version__ = "0.0.1"
 
+# Re-export class Regex
 from .regex import Regex

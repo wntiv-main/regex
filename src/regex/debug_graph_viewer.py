@@ -9,8 +9,6 @@ __all__ = ['DebugGraphViewer', 'MultiFigureViewer', 'test_layouts_for']
 import math
 from typing import Callable, Optional, TypeVar
 
-# REFERENCE: https://www.geeksforgeeks.org/visualize-graphs-in-python/
-
 try:
     import numpy as np
     import networkx
@@ -74,7 +72,6 @@ class DebugGraphViewer:
         self._color_overrides[end_idx] = (0.3, 1.0, 0.3)
         # iterate graph
         it = np.nditer(graph, flags=['multi_index', 'refs_ok'])
-        # if only python had a do: ... while() loop :(
         for edges in it:
             start_state, end_state = it.multi_index
             # add nodes

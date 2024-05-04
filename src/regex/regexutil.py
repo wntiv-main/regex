@@ -520,28 +520,6 @@ class ParserPredicate(ABC):
                 diff.remove(el)
                 diff.discard(other)
         return diff
-        # result: dict[int, list[ParserPredicate]] = {}
-        # for el in first:
-        #     el_hash = el.mutable_hash()
-        #     if el_hash in result:
-        #         result[el_hash].append(el)
-        #     else:
-        #         result[el.mutable_hash()] = [el]
-        # for el in second:
-        #     el_hash = el.mutable_hash()
-        #     if el_hash in result:
-        #         # Dont need to iterate in reverse as we always leave
-        #         # after deleting a value
-        #         for i in range(len(result[el_hash])):
-        #             if result[el_hash][i] == el:
-        #                 # Remove el that is in both first and second
-        #                 result[el_hash].pop(i)
-        #                 break
-        #         else:
-        #             result[el_hash].append(el)
-        #     else:
-        #         result[el.mutable_hash()] = [el]
-        # return set(itertools.chain.from_iterable(result.values()))
 
     def kind_of_in(self, collection: Iterable['ParserPredicate'])\
             -> 'ParserPredicate | None':
