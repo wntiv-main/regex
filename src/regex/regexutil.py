@@ -3,8 +3,7 @@
 __author__ = "Callum Hynes"
 __all__ = ['_parser_symbols', '_parser_symbols_escaped', 'State',
            'SignedSet', 'ParserPredicate', 'GenericParserPredicate',
-           'ConsumeString', 'ConsumeAny', 'MatchConditions',
-           'CaptureGroup']
+           'ConsumeAny', 'MatchConditions', 'CaptureGroup']
 
 from typing import (Any, Callable, Generic, Iterable, Optional, Self,
                     TypeAlias, TypeVar, TypeVarTuple, overload,
@@ -658,53 +657,6 @@ class GenericParserPredicate(ParserPredicate):
                                       self._evaluate)
 
 
-class ConsumeString(ParserPredicate):
-    """Predicate to match and consume a specific string"""
-
-    match_string: str
-    """The string that this predicate matches"""
-
-    def __init__(self, match_string: str) -> None:
-        self.match_string = match_string
-
-    @override
-    def evaluate(self, ctx: 'MatchConditions') -> bool:
-        # pylint: disable=protected-access
-        if (ctx._cursor + len(self.match_string) <= len(ctx._string)
-            and ctx._string[ctx._cursor:][0:len(self.match_string)]
-                == self.match_string):
-            ctx._cursor += len(self.match_string)
-            return True
-        return False
-
-    @override
-    def coverage(self):
-        # Should never be called after concatenation
-        assert len(self.match_string) == 1
-        return SignedSet((self.match_string,))
-
-    @override
-    def __hash__(self) -> int:
-        return hash(self.match_string)
-
-    @override
-    def __eq__(self, other: Any) -> bool:
-        if isinstance(other, ConsumeString):
-            return self.match_string == other.match_string
-        if isinstance(other, ConsumeAny):
-            return (other.match_set.length() == 1
-                    and other.match_set.unwrap_value() == self.match_string)
-        return NotImplemented
-
-    @override
-    def __str__(self) -> str:
-        return self._symbol() or f"'{self.match_string}'"
-
-    @override
-    def copy(self) -> 'ConsumeString':
-        return ConsumeString(self.match_string)
-
-
 class ConsumeAny(ParserPredicate):
     """Predicate which matches and consumes any char in a set"""
 
@@ -755,10 +707,6 @@ class ConsumeAny(ParserPredicate):
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, ConsumeAny):
             return self.match_set == other.match_set
-        if isinstance(other, ConsumeString):
-            return (self.match_set.length() == 1
-                    and self.match_set.unwrap_value()
-                    == other.match_string)
         return NotImplemented
 
     @override

@@ -8,9 +8,9 @@ from typing import Callable
 
 from .regex import Regex
 from .regex_optimiser import _OptimiseRegex
-from .regexutil import (CaptureGroup, ConsumeAny, ConsumeString,
-                        MatchConditions, ParserPredicate, SignedSet,
-                        _parser_symbols, _parser_symbols_escaped)
+from .regexutil import (CaptureGroup, ConsumeAny, MatchConditions,
+                        ParserPredicate, SignedSet, _parser_symbols,
+                        _parser_symbols_escaped)
 
 
 class PatternParseError(Exception):
@@ -411,7 +411,7 @@ class _RegexFactory:
                 #     self._anchored = True
                 self.append(_parser_symbols_escaped[ch].copy())
             case ch if ch in "\\.^$+*?[]{}()":
-                self.append(ConsumeString(ch))
+                self.append(ConsumeAny(ch))
             case _:
                 raise PatternParseError(
                     f"Unexpected sequence: "
@@ -605,5 +605,5 @@ class _RegexFactory:
                 self.regex |= rh_group
             # All other chars:
             case ch:
-                self.append(ConsumeString(ch))
+                self.append(ConsumeAny(ch))
         return False

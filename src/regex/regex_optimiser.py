@@ -11,8 +11,8 @@ import numpy as np
 # Pylint doesnt like loading sub-modules ig...?
 # pylint: disable-next=no-name-in-module
 from . import regex as rx  # Type annotating
-from .regexutil import (ConsumeAny, ConsumeString, MatchConditions,
-                        ParserPredicate, SignedSet, State)
+from .regexutil import (ConsumeAny, MatchConditions, ParserPredicate,
+                        SignedSet, State)
 
 
 class _MovingIndexHandler(ABC):
@@ -499,9 +499,6 @@ class _OptimiseRegex(_MovingIndexHandler):
                 case ConsumeAny():
                     accept |= edge.match_set
                     to_remove.append(edge)
-                case ConsumeString():
-                    accept.add(edge.match_string)
-                    to_remove.append(edge)
                 case _:
                     pass
         if accept.length() == 0:
@@ -510,11 +507,7 @@ class _OptimiseRegex(_MovingIndexHandler):
             return # No need to re-create
         for edge in to_remove:
             self.regex.edge_map[start.value(), end.value()].remove(edge)
-        edge: ParserPredicate
-        if accept.length() == 1:
-            edge = ConsumeString(accept.unwrap_value())
-        else:
-            edge = ConsumeAny(accept)
+        edge = ConsumeAny(accept)
         # Connect new merged edge
         self.regex.connect(start.value(), end.value(), edge)
         # pylint: disable-next=protected-access
@@ -528,9 +521,6 @@ class _OptimiseRegex(_MovingIndexHandler):
                 case ConsumeAny():
                     edge.match_set -= intersect
                     if not edge.match_set:
-                        edges.remove(edge)
-                case ConsumeString():
-                    if edge.match_string in intersect:
                         edges.remove(edge)
                 case MatchConditions.epsilon_transition:
                     pass
@@ -573,15 +563,11 @@ class _OptimiseRegex(_MovingIndexHandler):
                     second.remove(b)
                     intersect_edges.add(edge.copy())
             self._edges_remove_intersect(edges, intersection)
-        # If intersect not already covered
         if (intersection - SignedSet.union(
             *(x.coverage() for x in intersect_edges
               if x != MatchConditions.epsilon_transition))):
-            if intersection.length() == 1:
-                intersect_edges.add(
-                    ConsumeString(intersection.unwrap_value()))
-            else:
-                intersect_edges.add(ConsumeAny(intersection))
+            # If intersect not already covered, add ConsumeAny
+            intersect_edges.add(ConsumeAny(intersection))
         return intersect_edges
 
     def powerset_construction(  # pylint: disable=design

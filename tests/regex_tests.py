@@ -10,8 +10,8 @@ from typing import Callable, Literal, Self, assert_never, override
 
 from regex import Regex
 from regex.regex_factory import PatternParseError
-from regex.regexutil import (ConsumeAny, ConsumeString, ParserPredicate,
-                             SignedSet, State)
+from regex.regexutil import (ConsumeAny, ParserPredicate, SignedSet,
+                             State)
 
 from .test import (AssertNoRaises, AssertRaises, ResultType, TestCase,
                    TestType)
@@ -164,9 +164,9 @@ class NodeMatcher:
                     to: 'NodeMatcher | RegexState' = RegexState.ANY)\
             -> 'NodeMatcher':
         """
-        Asserts that this node has a ConsumeString move to another state
-        of the given type. An error will be raised during evaluation if
-        this is not the case
+        Asserts that this node has a ConsumeAny move of the given
+        literal char to another state of the given type. An error will
+        be raised during evaluation if this is not the case
 
         Arguments:
             literal_match -- The string to match
@@ -175,14 +175,14 @@ class NodeMatcher:
         Returns:
             The next state
         """
-        return self.has(ConsumeString(literal_match), to)
+        return self.has(ConsumeAny(literal_match), to)
 
     def has_literal_chain(self, literal_chain: str,
                           to: 'NodeMatcher | RegexState'
                           = RegexState.ANY) -> 'NodeMatcher':
         """
         Utility function for asserting an entire chain of single-char
-        ConsumeString edges between states, in sequence
+        ConsumeAny edges between states, in sequence
 
         Arguments:
             literal_chain -- The string to match
