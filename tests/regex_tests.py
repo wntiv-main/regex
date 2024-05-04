@@ -410,12 +410,12 @@ class NodeMatcher:
                         for state in range(self._handler._regex.size):
                             if (state in _taken
                                 or state == self._handler._regex.start
-                                    or state == self._handler._regex.end):
+                                or state == self._handler._regex.end):
                                 # State already has NodeMatcher
                                 continue
-                            if edge.kind_of_in(self._handler._regex
-                                               .edge_map[self.state_id,
-                                                         state]):
+                            if edge in(self._handler._regex
+                                           .edge_map[self.state_id,
+                                                     state]):
                                 child.state_id = state
                                 _taken.add(state)
                                 break
@@ -423,15 +423,13 @@ class NodeMatcher:
                             raise EdgeNotFoundError(self, edge, child)
                     case _:
                         assert_never(child._type)
-            # cursedness since ParserPredicates are mutable
-            found_edge = edge.kind_of_in(self._handler._regex.edge_map[
-                self.state_id, child.state_id])
-            if found_edge is None:
+            if edge not in self._handler._regex.edge_map[
+                    self.state_id, child.state_id]:
                 # Connection not found
                 raise EdgeNotFoundError(self, edge, child)
             self._handler._regex.edge_map[
                 self.state_id,
-                child.state_id].remove(found_edge)  # type: ignore
+                child.state_id].remove(edge)  # type: ignore
             child._evaluate(_taken)
         if self._handler._regex.edge_map[self.state_id, :].any():
             extras = {

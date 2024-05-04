@@ -210,9 +210,7 @@ class Regex:
             connection -- The transition which should connect the two
                 states.
         """
-        if not connection.kind_of_in(self.edge_map[start_state,
-                                                   end_state]):
-            self.edge_map[start_state, end_state].add(connection)
+        self.edge_map[start_state, end_state].add(connection)
 
     def connect_many(self,
                      start_state: State,
@@ -324,13 +322,14 @@ class Regex:
         changed = False
         # Iterate s2 row and make same connections from s1
         for index, src_set in enumerate(self.edge_map[source, :]):
-            dst_set = self.edge_map[destination, index]
+            src_set: set[ParserPredicate]
+            dst_set: set[ParserPredicate] = self.edge_map[destination, index]
             if changed:
                 pass  # Fast path, don't perform more comparisons
             elif (len(src_set) > len(dst_set)):
                 # More elements, definately changed
                 changed = True
-            elif ParserPredicate.set_mutable_diff(src_set, dst_set):
+            elif src_set - dst_set:
                 changed = True
             else:  # Skip merge if no changes made (small optimisation)
                 continue
@@ -361,7 +360,7 @@ class Regex:
             elif (len(src_set) > len(dst_set)):
                 # More elements, definately changed
                 changed = True
-            elif ParserPredicate.set_mutable_symdiff(src_set, dst_set):
+            elif src_set - dst_set:
                 changed = True
             else:  # Skip merge if no changes made (small optimisation)
                 continue

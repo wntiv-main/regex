@@ -263,10 +263,10 @@ class _OptimiseRegex(_MovingIndexHandler):
         # I no longer know what i was doing
         # see: programming meme now only god knows
         return (edge == MatchConditions.epsilon_transition
-                or (edge.kind_of_in(self.regex.edge_map[s1, s1])
-                    and edge.kind_of_in(self.regex.edge_map[s2, s2]))
-                or (edge.kind_of_in(self.regex.edge_map[s1, s2])
-                    and edge.kind_of_in(self.regex.edge_map[s2, s1]))
+                or (edge in self.regex.edge_map[s1, s1]
+                    and edge in self.regex.edge_map[s2, s2])
+                or (edge in self.regex.edge_map[s1, s2]
+                    and edge in self.regex.edge_map[s2, s1])
                 or (edge in self.regex.edge_map[s1, s1]
                     and MatchConditions.epsilon_transition
                     in self.regex.edge_map[s2, s1])
@@ -287,9 +287,8 @@ class _OptimiseRegex(_MovingIndexHandler):
         if s1 == s2 or self.regex.start in {s1, s2}:
             return False
         for i in range(self.regex.size):
-            diff = ParserPredicate.set_mutable_symdiff(
-                self.regex.edge_map[i, s1],
-                self.regex.edge_map[i, s2])
+            diff = (self.regex.edge_map[i, s1]
+                    ^ self.regex.edge_map[i, s2])
             for edge in diff:
                 if i not in {s1, s2}:
                     return False
@@ -316,9 +315,8 @@ class _OptimiseRegex(_MovingIndexHandler):
                 self.regex.end]):
             return False
         for i in range(self.regex.size):
-            diff = ParserPredicate.set_mutable_symdiff(
-                self.regex.edge_map[s1, i],
-                self.regex.edge_map[s2, i])
+            diff = (self.regex.edge_map[s1, i]
+                    ^ self.regex.edge_map[s2, i])
             for edge in diff:
                 if i not in {s1, s2}:
                     return False
@@ -410,8 +408,7 @@ class _OptimiseRegex(_MovingIndexHandler):
         start_loops = self.regex.edge_map[start.value(), start.value()]
         end_loops = self.regex.edge_map[end.value(), end.value()]
         if ((num_inputs == 1 or num_outputs == 1)
-            and not ParserPredicate.set_mutable_symdiff(
-                start_loops, end_loops)):
+            and start_loops == end_loops):
             # Trivial case, can simply merge two states
             self.regex.edge_map[start.value(), end.value()].remove(
                 MatchConditions.epsilon_transition)
@@ -519,9 +516,11 @@ class _OptimiseRegex(_MovingIndexHandler):
         for edge in edges.copy():
             match edge:
                 case ConsumeAny():
+                    # Remove before mutate, re-add after if needed
+                    edges.remove(edge)
                     edge.match_set -= intersect
-                    if not edge.match_set:
-                        edges.remove(edge)
+                    if edge.match_set:
+                        edges.add(edge)
                 case MatchConditions.epsilon_transition:
                     pass
                 case _:
@@ -557,10 +556,9 @@ class _OptimiseRegex(_MovingIndexHandler):
         # Remove intersection from both initial states
         for edges in first, second:
             for edge in edges.copy():
-                if ((a := edge.kind_of_in(first)) is not None
-                        and (b := edge.kind_of_in(second)) is not None):
-                    first.remove(a)
-                    second.remove(b)
+                if (edge in first and edge in second):
+                    first.remove(edge)
+                    second.remove(edge)
                     intersect_edges.add(edge.copy())
             self._edges_remove_intersect(edges, intersection)
         if (intersection - SignedSet.union(
@@ -644,7 +642,7 @@ class _OptimiseRegex(_MovingIndexHandler):
                 intersect_loops = self.regex.edge_map[out.value(), other]
                 loops = self.regex.edge_map[out.value(), out.value()]
                 for edge in intersect_loops.copy():
-                    if edge.kind_of_in(loops):
+                    if edge in loops:
                         intersect_loops.remove(edge)
                 self.regex._debug(f"pstmrg {state} -> {out} <& {other}")
                 if self._remove_group_if_unreachable(other):

@@ -464,75 +464,6 @@ class ParserPredicate(ABC):
         """
         raise NotImplementedError()
 
-    # I realise now... this didn't have to be this way
-    # But... it is too late to change now
-    def mutable_hash(self) -> int:
-        """
-        An alternative hash method that may change if the object is
-        mutated
-
-        Returns:
-            The hash of the object
-        """
-        return hash(self)
-
-    @staticmethod
-    def set_mutable_diff(
-            first: set['ParserPredicate'],
-            second: set['ParserPredicate']) -> set['ParserPredicate']:
-        """
-        Finds the difference of two sets, using an alternative hash
-        function
-
-        Returns:
-            A new set containing all the elements from the first set
-            that aren't in the second set
-        """
-        result = first - second
-        for el in second:
-            if el in first:
-                continue
-            if (alt_el := el.kind_of_in(first)) is not None:
-                result.remove(alt_el)
-        return result
-
-    @staticmethod
-    def set_mutable_symdiff(
-            first: set['ParserPredicate'],
-            second: set['ParserPredicate']) -> set['ParserPredicate']:
-        """
-        Finds the symmetric difference of two sets, using an alternative
-        hash function
-
-        Returns:
-            A new set containing all the elements that are only in ONE
-            of the two sets
-        """
-        diff = first ^ second
-        for el in diff.copy():
-            if el not in diff:
-                continue
-            if ((el in first and
-                 (other := el.kind_of_in(second)) is not None)
-                or (el in second and
-                    (other := el.kind_of_in(first)) is not None)):
-                diff.remove(el)
-                diff.discard(other)
-        return diff
-
-    def kind_of_in(self, collection: Iterable['ParserPredicate'])\
-            -> 'ParserPredicate | None':
-        """
-        Returns the ParserPredicate instance in the collection that
-        (soft) equals `self`. If there is none, returns None.
-        """
-        if self in collection:  # Fast path
-            return self
-        for edge in collection:  # mutable cursedness
-            if edge == self:
-                return edge
-        return None
-
     @abstractmethod
     def __eq__(self, other: Any) -> bool:
         """
@@ -691,16 +622,6 @@ class ConsumeAny(ParserPredicate):
 
     @override
     def __hash__(self) -> int:
-        # Lets not use hash in case of mutation :)
-        # Note this means that a == b does NOT imply hash(a) == hash(b)
-        # as is common expectation. lets hope noone notices :/
-        # Otherwise, we *could* implement a secondary .val_equals()
-        # method, but im lazy :P
-        return id(self.match_set)
-
-    @override
-    def mutable_hash(self) -> int:
-        # now we can use hash
         return hash(self.match_set)
 
     @override

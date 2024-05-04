@@ -328,6 +328,8 @@ class _RegexFactory:
                                    ConsumeAny)):
                         # special ranges e.g. \d, \s
                         # not sure this is standard but its useful so...
+                        # i think it is standard ive seen it used in
+                        # places
                         result |= (_parser_symbols_escaped[x]
                                    .match_set)  # type: ignore
                         # Do not handle further
