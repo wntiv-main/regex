@@ -33,3 +33,8 @@ jobs:
       timeout-minutes: 3
       run: |
         dist/example_regex_viewer.exe --just-testing
+    - name: Archive executable
+      uses: actions/upload-artifact@v4
+      with:
+        name: example_regex_viewer
+        path: dist/example_regex_viewer.exe
