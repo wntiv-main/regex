@@ -3,8 +3,8 @@ Regular expression library using deterministic finite automaton (DFA)
 to build and evaluate regular expressions efficiently.
 
 ## Environment
-Requires Python 12
-Requires `pip install numpy`
+- Requires Python 12
+- Requires `pip install numpy` (should install with module)
 
 ## Building manually
 In project root directory:
@@ -25,18 +25,19 @@ Build tasks are provided to do the above building for you. Note that these tasks
 if you need those either install the requirements manually, or follow the manual build instructions
 
 ### Running module in development
-Faster, links the module source directly, also meaning that module doesnt have to be re-built and installed
-whenever modifications are made to the module. Useful for development
-Task: `Develop: Install module` to install module into python env
-Task: `Develop: Uninstall module` to uninstall and cleanup
+Faster, links the module source directly, also meaning that module doesnt
+have to be re-built and installed whenever modifications are made to the
+module. Useful for development
+- Task: `Develop: Install module` to install module into python env
+- Task: `Develop: Uninstall module` to uninstall and cleanup
 
 ### Building module deployment distribution
 Requires `pip install build`, slower
-Task: `Deploy: Install module` to install module into python env
-Task: `Uninstall module` to uninstall and cleanup
-This distribution (output in dist/) *could* then be uploaded to a package index, e.g. PyPI
-I have chosen *not* to do this (yet?) as this is a school project and not stable enough to
-be used in production.
+- Task: `Deploy: Install module` to install module into python env
+- Task: `Uninstall module` to uninstall and cleanup
+This distribution (output in dist/) *could* then be uploaded to a package
+index, e.g. PyPI. I have chosen *not* to do this (yet?) as this is a school
+project and not stable enough to be used in production.
 
 ## Running tests
 `launch.json` provides three run configurations to output the tests
