@@ -17,8 +17,8 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install setuptools
-        pip install build
+        python -m pip install --upgrade setuptools
+        python -m pip install --upgrade build
     - name: Build module
       run: |
         python -m build
@@ -26,5 +26,6 @@ jobs:
       run: |
         pip install $(ls dist/*.whl)
     - name: Running tests
+      timeout-minutes: 3
       run: |
         python -m tests --headless

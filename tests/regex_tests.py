@@ -10,13 +10,14 @@ from typing import Callable, Literal, Self, assert_never, override
 
 from regex import Regex
 from regex.regex_factory import PatternParseError
-from regex.regexutil import (ConsumeAny, ConsumeString, ParserPredicate,
-                             SignedSet, State)
+from regex.regexutil import (ConsumeAny, ParserPredicate, SignedSet,
+                             State)
 
 from .test import (AssertNoRaises, AssertRaises, ResultType, TestCase,
                    TestType)
 from .test_error import (EdgeNotFoundError, ExtraEdgesError,
-                         RegexMatchError, StateIdentityError)
+                         RegexMatchError, RegexPositionalMatchError,
+                         StateIdentityError)
 
 if __debug__ and not '--headless' in sys.argv:
     from regex.debug_graph_viewer import (DebugGraphViewer,
@@ -163,9 +164,9 @@ class NodeMatcher:
                     to: 'NodeMatcher | RegexState' = RegexState.ANY)\
             -> 'NodeMatcher':
         """
-        Asserts that this node has a ConsumeString move to another state
-        of the given type. An error will be raised during evaluation if
-        this is not the case
+        Asserts that this node has a ConsumeAny move of the given
+        literal char to another state of the given type. An error will
+        be raised during evaluation if this is not the case
 
         Arguments:
             literal_match -- The string to match
@@ -174,14 +175,14 @@ class NodeMatcher:
         Returns:
             The next state
         """
-        return self.has(ConsumeString(literal_match), to)
+        return self.has(ConsumeAny(literal_match), to)
 
     def has_literal_chain(self, literal_chain: str,
                           to: 'NodeMatcher | RegexState'
                           = RegexState.ANY) -> 'NodeMatcher':
         """
         Utility function for asserting an entire chain of single-char
-        ConsumeString edges between states, in sequence
+        ConsumeAny edges between states, in sequence
 
         Arguments:
             literal_chain -- The string to match
@@ -409,12 +410,12 @@ class NodeMatcher:
                         for state in range(self._handler._regex.size):
                             if (state in _taken
                                 or state == self._handler._regex.start
-                                    or state == self._handler._regex.end):
+                                or state == self._handler._regex.end):
                                 # State already has NodeMatcher
                                 continue
-                            if edge.kind_of_in(self._handler._regex
-                                               .edge_map[self.state_id,
-                                                         state]):
+                            if edge in(self._handler._regex
+                                           .edge_map[self.state_id,
+                                                     state]):
                                 child.state_id = state
                                 _taken.add(state)
                                 break
@@ -422,15 +423,13 @@ class NodeMatcher:
                             raise EdgeNotFoundError(self, edge, child)
                     case _:
                         assert_never(child._type)
-            # cursedness since ParserPredicates are mutable
-            found_edge = edge.kind_of_in(self._handler._regex.edge_map[
-                self.state_id, child.state_id])
-            if found_edge is None:
+            if edge not in self._handler._regex.edge_map[
+                    self.state_id, child.state_id]:
                 # Connection not found
                 raise EdgeNotFoundError(self, edge, child)
             self._handler._regex.edge_map[
                 self.state_id,
-                child.state_id].remove(found_edge)  # type: ignore
+                child.state_id].remove(edge)  # type: ignore
             child._evaluate(_taken)
         if self._handler._regex.edge_map[self.state_id, :].any():
             extras = {
@@ -637,6 +636,160 @@ class TestRegexMatches(TestCase):
         for test in tests:
             self._unexpected_matches.add(test)
         return self
+
+
+class TestRegexMatchesAt(TestCase):
+    """
+    Test case to assert that a given regular expression is matched at
+    the correct locations within the given source strings
+    """
+
+    _pattern: str
+    """The regular expression to use for matching"""
+
+    _reverse: bool
+    """Whether the reverse regex should be tested instead"""
+
+    _regex: Regex | None
+    """The Regex compiled from the regular expression pattern"""
+
+    _expected_matches: dict[str, tuple[slice, ...]]
+    """The set of strings expected to match"""
+
+    class _Helper: # pylint: disable=too-few-public-methods
+        """
+        Handles asserting expected matches, using a clean(ish) syntax by
+        allowing slice notation (in a slightly cursed way), or
+        alternatively using a method in a more pythonic way
+        """
+
+        _parent: 'TestRegexMatchesAt'
+        """The TestCase to append this test to"""
+
+        _source_str: str
+        """The string to search for the given matches"""
+
+        def __init__(self, parent: 'TestRegexMatchesAt',
+                     source: str):
+            self._parent = parent
+            self._source_str = source
+
+        def with_match_at(
+                self,
+                start: int,
+                end: int | None = None,
+                *, substr: str | None = None) -> Self:
+            """
+            Asserts that the Regex matches at this location in the
+            source string, and (optionally) finds the right substring
+
+            Arguments:
+                start -- The expected match start index
+                end -- The expected match end index (optional)
+
+            Keyword Arguments:
+                substr -- The expected substring (optional)
+            """
+            # pylint: disable=protected-access
+            if self._source_str not in self._parent._expected_matches:
+                self._parent._expected_matches[self._source_str] = ()
+            # remember tuples are immutable, but their containers aren't
+            self._parent._expected_matches[
+                self._source_str] += (slice(start, end, substr),)
+            return self
+
+        def __getitem__(
+            self,
+            match_positions: slice
+                           | tuple[slice, ...]) -> 'TestRegexMatchesAt':
+            """
+            Asserts that the Regex matches at this location in the
+            source string, and finds the right substring
+
+            Arguments:
+                match_positions -- The positions of the expected matches
+                    as slices, optionally with the expected substring to
+                    match as the `step` parameter: i.e., one might write
+                    test.assert_matches_at('...')[3:8:"hello", ...etc]
+
+            Returns:
+                The parent test case, for chaining
+            """
+            # pylint: disable=protected-access
+            if isinstance(match_positions, slice):
+                match_positions = (match_positions,)
+            self._parent._expected_matches[
+                self._source_str] = match_positions
+            return self._parent
+
+    def __init__(self, pattern: str,
+                 test_type: TestType = TestType.EXPECTED,
+                 reverse: bool = False):
+        super().__init__(test_type, f"Testing matches for `{pattern}`")
+        self._pattern = pattern
+        self._reverse = reverse
+        # Defer initialization for error capture
+        self._regex = None
+        self._expected_matches = {}
+
+    @override
+    def _inner_test(self) -> None:
+        """Test strings for matches, update test case outcome fields"""
+        first = True
+        expected = "Expected to find matches"
+        for value, matches in self._expected_matches.items():
+            if first:
+                first = False
+            else:
+                expected += "; and"
+            expected += f" in ```{value}``` at "
+            expected += ', '.join(
+                f"{idx.start}:{idx.stop}" + (
+                    f" (should match `{idx.step}`)"
+                    if idx.step is not None else '')
+                for idx in matches)
+        self.set_expected(expected)
+        self._regex = Regex(self._pattern)
+        if self._reverse:
+            self._regex = self._regex.reverse()
+        for source, matches in self._expected_matches.items():
+            results = list(self._regex.match(source))
+            for idx in matches:
+                for i, pos in enumerate(results):
+                    if (idx.start is not None
+                            and idx.start != pos[0].start):
+                        continue
+                    if (idx.stop is not None
+                            and idx.stop != pos[0].stop):
+                        raise RegexPositionalMatchError(
+                            self._regex, source, idx,
+                            RegexPositionalMatchError.Type.MATCH_MISSED)
+                    if idx.step is not None and idx.step != pos[1]:
+                        raise RegexPositionalMatchError(
+                            self._regex, source, idx,
+                            RegexPositionalMatchError
+                                .Type.INCORRECT_SUBSTRING,
+                            got=pos[1])
+                    results.pop(i)
+                    break
+                else:
+                    raise RegexPositionalMatchError(
+                        self._regex, source, idx,
+                        RegexPositionalMatchError.Type.NO_MATCH)
+
+    def assert_matches_at(self, source: str) -> _Helper:
+        """
+        Asserts that the Regex matches the given string at the given
+        positions
+
+        Arguments:
+            source -- The string to search for matches within
+
+        Returns:
+            A helper object allowing you to specify the position of
+            expected matches, and optionally the expected substring
+        """
+        return TestRegexMatchesAt._Helper(self, source)
 
 
 class TestNoParseError(AssertNoRaises):

@@ -8,9 +8,9 @@ from typing import Callable
 
 from .regex import Regex
 from .regex_optimiser import _OptimiseRegex
-from .regexutil import (CaptureGroup, ConsumeAny, ConsumeString,
-                        MatchConditions, ParserPredicate, SignedSet,
-                        _parser_symbols, _parser_symbols_escaped)
+from .regexutil import (CaptureGroup, ConsumeAny, MatchConditions,
+                        ParserPredicate, SignedSet, _parser_symbols,
+                        _parser_symbols_escaped)
 
 
 class PatternParseError(Exception):
@@ -328,6 +328,8 @@ class _RegexFactory:
                                    ConsumeAny)):
                         # special ranges e.g. \d, \s
                         # not sure this is standard but its useful so...
+                        # i think it is standard ive seen it used in
+                        # places
                         result |= (_parser_symbols_escaped[x]
                                    .match_set)  # type: ignore
                         # Do not handle further
@@ -386,10 +388,11 @@ class _RegexFactory:
             # pylint: disable=protected-access
             self.regex._debug("start")
             # Loop until can match
-            # self._regex.connect(self._regex.start,
-            #                     self._regex.start,
-            #                     MatchConditions.consume_any)
             _OptimiseRegex(self.regex)
+            self.regex._base = self.regex.copy()
+            self.regex._prepare_for_use()
+            # Dont lazily initialize reverse if using Regex constructor
+            self.regex._prepare_full_reverse()
         return self.regex
 
     def parse_escaped(self, char: str) -> None:
@@ -410,7 +413,7 @@ class _RegexFactory:
                 #     self._anchored = True
                 self.append(_parser_symbols_escaped[ch].copy())
             case ch if ch in "\\.^$+*?[]{}()":
-                self.append(ConsumeString(ch))
+                self.append(ConsumeAny(ch))
             case _:
                 raise PatternParseError(
                     f"Unexpected sequence: "
@@ -532,7 +535,7 @@ class _RegexFactory:
             case '(':  # group
                 start_pos = self._cur - 1
                 # Capture groups, currently ignored
-                # Will use later maybe!
+                # Are available here for future extension
                 # pylint: disable-next=unused-variable
                 capture_group: CaptureGroup | None = None
                 if self._try_consume("?:"):
@@ -581,6 +584,7 @@ class _RegexFactory:
                     f"Unopened '{char}'",
                     self.pattern, self._cur - 1)
             case '|':  # or
+                self._require_previous()
                 start_cur = self._cur - 1
                 # Parse RHS of expression
                 rh_builder = _RegexFactory(
@@ -589,19 +593,19 @@ class _RegexFactory:
                     _cid=self._capture_auto_id,
                     _open_bracket_pos=self._cursor_started)
                 # pylint: disable=protected-access
+                rh_group = rh_builder.build(
+                    _nested=_NestedType.NESTED_ALTERNATIVE)
                 self._cur = rh_builder._cur
                 self._capture_auto_id = rh_builder._capture_auto_id
-                nest_type = (_NestedType.NESTED_ALTERNATIVE
-                             if nested == _NestedType.TOP else nested)
-                rh_group = rh_builder.build(_nested=nest_type)
                 self.connect_last()
-                if not self.regex or not rh_group:
+                # Make sure to not double-add
+                self._last_token = None
+                if not rh_group:
                     raise PatternParseError(
-                        "'|' must have atleast one token on each side",
+                        "'|' must be succeeded by atleast one token",
                         self.pattern, start_cur)
                 self.regex |= rh_group
-                return True
             # All other chars:
             case ch:
-                self.append(ConsumeString(ch))
+                self.append(ConsumeAny(ch))
         return False

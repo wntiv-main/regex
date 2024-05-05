@@ -6,7 +6,8 @@ __all__ = ["TestError", "TestErrorImpl", "ExceptionAsTestError",
            "ExtraEdgesError", "RegexMatchError"]
 
 from abc import ABC, abstractmethod
-from typing import assert_never, override
+from enum import IntEnum, auto
+from typing import Any, assert_never, override
 
 from regex import Regex
 from regex.regexutil import ParserPredicate, State
@@ -199,3 +200,69 @@ class RegexMatchError(TestError):
         return (f"'{self._match}' "
                 f"did{_nt if self._should_match else ''} match the "
                 f"regular expression.")
+
+
+class RegexPositionalMatchError(TestError):
+    """
+    Error indicating that a regex that was expected to match a specific
+    substring at the specified locaation did not match
+    """
+
+    class Type(IntEnum):
+        """The specific type of the error"""
+        NO_MATCH = auto()
+        MATCH_MISSED = auto()
+        INCORRECT_SUBSTRING = auto()
+
+    _regex: Regex
+    """The regex which was being matched against"""
+
+    _source: str
+    """The string that was being tested"""
+
+    _match_position: slice
+    """The expected position of the match, and expected substring"""
+    # Abusing `step` member to store expected substring
+
+    _extra: Any | None
+
+    _error_type: Type
+    """The specific type of the error"""
+
+    def __init__(self, # pylint: disable=too-many-arguments
+                 regex: Regex,
+                 source: str,
+                 test: slice,
+                 error_type: Type,
+                 got: Any | None = None):
+        super().__init__(regex, source, test, error_type)
+        self._regex = regex
+        self._source = source
+        self._match_position = test
+        self._error_type = error_type
+        self._extra = got
+
+    @override
+    def outcome_message(self) -> str:
+        Type = RegexPositionalMatchError.Type
+        match self._error_type:
+            case Type.NO_MATCH:
+                return (f"No match was found at "
+                        f"{self._match_position.start}:"
+                        f"{self._match_position.stop}"
+                        + f" (expecting: '{self._match_position.step}')"
+                            if self._match_position.step is not None
+                            else '')
+            case Type.MATCH_MISSED:
+                return (f"Match was found at "
+                        f"{self._match_position.start}, but did not end"
+                        f" at {self._match_position.stop} as expected")
+            case Type.INCORRECT_SUBSTRING:
+                return (f"Match was found at "
+                        f"{self._match_position.start}:"
+                        f"{self._match_position.stop}, but did not "
+                        f"match the expected substring: "
+                        f"'{self._match_position.step}' (got: "
+                        f"'{self._extra}')")
+            case _:
+                assert_never(self._error_type)

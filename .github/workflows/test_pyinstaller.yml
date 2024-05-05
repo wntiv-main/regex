@@ -1,0 +1,35 @@
+name: Test example executable
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install --upgrade setuptools
+        python -m pip install --upgrade build
+        python -m pip install --upgrade pyinstaller
+    - name: Build module
+      run: |
+        python -m build
+    - name: Install module
+      run: |
+        pip install $(ls dist/*.whl)
+    - name: Build example executable
+      run: |
+        pyinstaller example_regex_viewer.spec
+    - name: Run example executable
+      timeout-minutes: 3
+      run: |
+        dist/example_regex_viewer.exe --just-testing

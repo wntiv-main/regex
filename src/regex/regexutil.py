@@ -3,8 +3,7 @@
 __author__ = "Callum Hynes"
 __all__ = ['_parser_symbols', '_parser_symbols_escaped', 'State',
            'SignedSet', 'ParserPredicate', 'GenericParserPredicate',
-           'ConsumeString', 'ConsumeAny', 'MatchConditions',
-           'CaptureGroup']
+           'ConsumeAny', 'MatchConditions', 'CaptureGroup']
 
 from typing import (Any, Callable, Generic, Iterable, Optional, Self,
                     TypeAlias, TypeVar, TypeVarTuple, overload,
@@ -125,7 +124,7 @@ class SignedSet(Generic[T]):
         ...
 
     # pylint: disable-next=no-self-argument
-    def union(*sets):  # type: ignore
+    def union(*sets: 'SignedSet[T]') -> 'SignedSet[T]':
         """
         Finds the union of the given sets, the set containing all of the
         elements of all the given sets
@@ -465,95 +464,6 @@ class ParserPredicate(ABC):
         """
         raise NotImplementedError()
 
-    def mutable_hash(self) -> int:
-        """
-        An alternative hash method that may change if the object is
-        mutated
-
-        Returns:
-            The hash of the object
-        """
-        return hash(self)
-
-    @staticmethod
-    def set_mutable_diff(
-            first: set['ParserPredicate'],
-            second: set['ParserPredicate']) -> set['ParserPredicate']:
-        """
-        Finds the difference of two sets, using an alternative hash
-        function
-
-        Returns:
-            A new set containing all the elements from the first set
-            that aren't in the second set
-        """
-        result = first - second
-        for el in second:
-            if el in first:
-                continue
-            if (alt_el := el.kind_of_in(first)) is not None:
-                result.remove(alt_el)
-        return result
-
-    @staticmethod
-    def set_mutable_symdiff(
-            first: set['ParserPredicate'],
-            second: set['ParserPredicate']) -> set['ParserPredicate']:
-        """
-        Finds the symmetric difference of two sets, using an alternative
-        hash function
-
-        Returns:
-            A new set containing all the elements that are only in ONE
-            of the two sets
-        """
-        diff = first ^ second
-        for el in diff.copy():
-            if el not in diff:
-                continue
-            if ((el in first and
-                 (other := el.kind_of_in(second)) is not None)
-                or (el in second and
-                    (other := el.kind_of_in(first)) is not None)):
-                diff.remove(el)
-                diff.discard(other)
-        return diff
-        # result: dict[int, list[ParserPredicate]] = {}
-        # for el in first:
-        #     el_hash = el.mutable_hash()
-        #     if el_hash in result:
-        #         result[el_hash].append(el)
-        #     else:
-        #         result[el.mutable_hash()] = [el]
-        # for el in second:
-        #     el_hash = el.mutable_hash()
-        #     if el_hash in result:
-        #         # Dont need to iterate in reverse as we always leave
-        #         # after deleting a value
-        #         for i in range(len(result[el_hash])):
-        #             if result[el_hash][i] == el:
-        #                 # Remove el that is in both first and second
-        #                 result[el_hash].pop(i)
-        #                 break
-        #         else:
-        #             result[el_hash].append(el)
-        #     else:
-        #         result[el.mutable_hash()] = [el]
-        # return set(itertools.chain.from_iterable(result.values()))
-
-    def kind_of_in(self, collection: Iterable['ParserPredicate'])\
-            -> 'ParserPredicate | None':
-        """
-        Returns the ParserPredicate instance in the collection that
-        (soft) equals `self`. If there is none, returns None.
-        """
-        if self in collection:  # Fast path
-            return self
-        for edge in collection:  # mutable cursedness
-            if edge == self:
-                return edge
-        return None
-
     @abstractmethod
     def __eq__(self, other: Any) -> bool:
         """
@@ -678,53 +588,6 @@ class GenericParserPredicate(ParserPredicate):
                                       self._evaluate)
 
 
-class ConsumeString(ParserPredicate):
-    """Predicate to match and consume a specific string"""
-
-    match_string: str
-    """The string that this predicate matches"""
-
-    def __init__(self, match_string: str) -> None:
-        self.match_string = match_string
-
-    @override
-    def evaluate(self, ctx: 'MatchConditions') -> bool:
-        # pylint: disable=protected-access
-        if (ctx._cursor + len(self.match_string) <= len(ctx._string)
-            and ctx._string[ctx._cursor:][0:len(self.match_string)]
-                == self.match_string):
-            ctx._cursor += len(self.match_string)
-            return True
-        return False
-
-    @override
-    def coverage(self):
-        # Should never be called after concatenation
-        assert len(self.match_string) == 1
-        return SignedSet((self.match_string,))
-
-    @override
-    def __hash__(self) -> int:
-        return hash(self.match_string)
-
-    @override
-    def __eq__(self, other: Any) -> bool:
-        if isinstance(other, ConsumeString):
-            return self.match_string == other.match_string
-        if isinstance(other, ConsumeAny):
-            return (other.match_set.length() == 1
-                    and other.match_set.unwrap_value() == self.match_string)
-        return NotImplemented
-
-    @override
-    def __str__(self) -> str:
-        return self._symbol() or f"'{self.match_string}'"
-
-    @override
-    def copy(self) -> 'ConsumeString':
-        return ConsumeString(self.match_string)
-
-
 class ConsumeAny(ParserPredicate):
     """Predicate which matches and consumes any char in a set"""
 
@@ -759,26 +622,12 @@ class ConsumeAny(ParserPredicate):
 
     @override
     def __hash__(self) -> int:
-        # Lets not use hash in case of mutation :)
-        # Note this means that a == b does NOT imply hash(a) == hash(b)
-        # as is common expectation. lets hope noone notices :/
-        # Otherwise, we *could* implement a secondary .val_equals()
-        # method, but im lazy :P
-        return id(self.match_set)
-
-    @override
-    def mutable_hash(self) -> int:
-        # now we can use hash
         return hash(self.match_set)
 
     @override
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, ConsumeAny):
             return self.match_set == other.match_set
-        if isinstance(other, ConsumeString):
-            return (self.match_set.length() == 1
-                    and self.match_set.unwrap_value()
-                    == other.match_string)
         return NotImplemented
 
     @override

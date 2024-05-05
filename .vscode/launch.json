@@ -5,11 +5,29 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
+			"name": "Example: Run executable",
+			"type": "f5anything",
+			"request": "launch",
+			"command": "${workspaceFolder}/dist/example_regex_viewer.exe",
+			"terminalName": "F5 Anything",
+			"terminalIndex": -1,
+			"showTerminal": true,
+			"preLaunchTask": "Example: Build executable"
+		},
+		{
 			"name": "Python: Run Tests",
 			"type": "debugpy",
 			"request": "launch",
 			"module": "tests",
 			"args": ["--full-output"],
+			"console": "integratedTerminal"
+		},
+		{
+			"name": "Python: Run Tests (Headless)",
+			"type": "debugpy",
+			"request": "launch",
+			"module": "tests",
+			"args": ["--full-output", "--headless"],
 			"console": "integratedTerminal"
 		},
 		{

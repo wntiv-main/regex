@@ -13,7 +13,7 @@ def main():
     # r"^(?P<user>(?:\w|\.|\+|-)+)@(?P<domain>(?:\w+\.)+\w+)$"
     # rx = RegexBuilder(
     #     r"(?:def|function|(?P<rtype>\w+))\s*(?P<fname>\w+)\s*" \
-    #     r"\((?:(?P<argtype>\w+)\s*(?P<argname>\w+))*\)\s*" \
+    #     r"\((?:(?P<argtype>\w+)\s*(?P<argname>\w+))*\)\s*" \sillly
     #     r"(?:=>\s*(?P<rtype>\w+))?").build()
     mfv = MultiFigureViewer()
 
@@ -21,18 +21,29 @@ def main():
         view = DebugGraphViewer(rx.edge_map,
                                 rx.start, rx.end)
         fig = view.render()
-        fig.suptitle(str(rx), fontsize=8)
+        fig.suptitle(str(rx), fontsize=12 - rx.size // 5)
         fig.canvas.manager.set_window_title(msg)  # type: ignore
         mfv.add(fig)
         print(f"{msg}:\n{rx}")
-        print(f"dupls: {rx._find_double_refs()}")
-    Regex._debug_function = debug
+        # print(f"dupls: {rx._find_double_refs()}")
+    # Regex._debug_function = debug
     try:
-        rx = Regex(
-            r"\A(?:\+\d{1,2}\s*)?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}\Z")
-        print(rx)
+        # r"\w+(?:\.\w+)*@\w+(?:\.\w+)+"
+        # r"(?:ca{1,2}b*)?a"
+        # r"(?:\+\d{1,2}\s*)?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}"
+        for i in range(10):
+            rx = Regex(r"(?P<user>\w+(?:\.\w+)*)@(?P<domain>\w+(?:\.\w+)+)")
+            print(f"Done {i}")
+        assert rx._base is not None
+        # while (i := input("email??: ")):
+        #     print(rx.test(i))
         mfv.add(DebugGraphViewer(rx.edge_map,
                                  rx.start, rx.end).render())
+        # rxr = rx.reverse()
+        # # while (i := input("emailish??: ")):
+        # #     print(rx.replace_in(i, '(%0)'))
+        # mfv.add(DebugGraphViewer(rxr.edge_map,
+        #                          rxr.start, rxr.end).render())
     except Exception:
         # Print exception, still show viewer
         traceback.print_exc()
